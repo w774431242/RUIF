@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>RUIF.Tests</RootNamespace>
+    <AssemblyName>RUIF.Tests</AssemblyName>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <!-- 与 PersonalChronicle.Tests 保持一致的版本（离线可用：本机 NuGet 缓存已有） -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 引用刚编译好的框架 dll（Private=false：不复制进包，模拟消费方只引用不内嵌） -->
+    <Reference Include="RUIF">
+      <HintPath>..\Assemblies\RUIF.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <RimWorldPath Condition="'$(RimWorldPath)' == ''">E:\SteamLibrary\steamapps\common\RimWorld</RimWorldPath>
+  </PropertyGroup>
+
+  <!-- 与 PC 测试工程同策略：Build 后把框架 dll 与引擎程序集拷入输出目录，使测试可离线运行 -->
+  <Target Name="CopyModAssembly" AfterTargets="Build">
+    <Copy SourceFiles="..\Assemblies\RUIF.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true"
+          Condition="Exists('..\Assemblies\RUIF.dll')" />
+    <ItemGroup>
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\Assembly-CSharp.dll" />
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\Assembly-CSharp-firstpass.dll" />
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.dll" />
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll" />
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.IMGUIModule.dll" />
+      <!-- VanillaUiSkin.ExportAssets 用到 Texture2D.EncodeToPNG（ImageConversion 扩展方法）⇒ 离线运行需该模块可加载 -->
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.ImageConversionModule.dll" />
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.SharedInternalsModule.dll" />
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\netstandard.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(EngineDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true"
+          Condition="Exists('$(RimWorldPath)\RimWorldWin64_Data\Managed')" />
+  </Target>
+</Project>

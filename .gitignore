@@ -1,0 +1,44 @@
+# ===== RUIF 仓库 .gitignore =====
+
+# 构建产物
+**/obj/
+**/bin/
+*.pdb
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+
+# 本地构建 / 同步脚本产生的日志与临时文件
+*.log
+*.bak
+*.bak_*
+_sync_*.txt
+_hc_*.txt
+_verify_release_out.txt
+_preview_test.png
+_build_ruif.log
+_test_ruif.log
+
+# Steam 创意工坊条目 ID（游戏上传时写入；仓库与具体工坊条目解耦，不入库）
+About/PublishedFileId.txt
+
+# Python 缓存 / 字节码
+__pycache__/
+*.pyc
+
+# 一次性 / 临时脚本（用完即删，不入库）
+_tmp_*
+_patch_*
+
+# 操作系统垃圾
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 反编译的游戏源码（仅本地验证参考，不公开发布）
+_verify/*.decompiled.cs
+

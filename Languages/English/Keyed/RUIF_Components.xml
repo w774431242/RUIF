@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <!-- RUIF component strings (v2.1.0 "keyed" pass: components no longer hardcode any UI text).
+       Namespace RUIF.Comp.*; placeholders {0}/{1} follow the NamedArgument position.
+       All call sites go through the framework-internal Tr.Get(...) (see Source/Core/Tr.cs). -->
+
+  <!-- Common -->
+  <RUIF.Comp.Common.OK>OK</RUIF.Comp.Common.OK>
+  <RUIF.Comp.Common.Confirm>Confirm</RUIF.Comp.Common.Confirm>
+  <RUIF.Comp.Common.Cancel>Cancel</RUIF.Comp.Common.Cancel>
+  <RUIF.Comp.Common.Execute>Execute</RUIF.Comp.Common.Execute>
+  <RUIF.Comp.Common.Apply>Apply</RUIF.Comp.Common.Apply>
+  <RUIF.Comp.Common.View>View</RUIF.Comp.Common.View>
+  <RUIF.Comp.Common.Undo>Undo</RUIF.Comp.Common.Undo>
+  <RUIF.Comp.Undo.Done>Undid {0}</RUIF.Comp.Undo.Done>
+  <RUIF.Comp.Common.Rebind>Rebind</RUIF.Comp.Common.Rebind>
+  <RUIF.Comp.Common.Max>Max</RUIF.Comp.Common.Max>
+  <RUIF.Comp.Common.Snap>Snap</RUIF.Comp.Common.Snap>
+  <RUIF.Comp.Common.Lower>Lower</RUIF.Comp.Common.Lower>
+  <RUIF.Comp.Common.Upper>Upper</RUIF.Comp.Common.Upper>
+  <RUIF.Comp.Common.On>On</RUIF.Comp.Common.On>
+  <RUIF.Comp.Common.Off>Off</RUIF.Comp.Common.Off>
+  <RUIF.Comp.Common.Current>(current)</RUIF.Comp.Common.Current>
+  <RUIF.Comp.Common.More>More {0}</RUIF.Comp.Common.More>
+  <RUIF.Comp.Common.Page>Page {0}/{1}</RUIF.Comp.Common.Page>
+  <RUIF.Comp.Common.Preset>Preset</RUIF.Comp.Common.Preset>
+  <RUIF.Comp.Common.SaveAs>Save as</RUIF.Comp.Common.SaveAs>
+  <RUIF.Comp.Common.Wheel>Wheel {0}</RUIF.Comp.Common.Wheel>
+
+  <!-- Navigation -->
+  <RUIF.Comp.Nav.StackDepth>(depth {0})</RUIF.Comp.Nav.StackDepth>
+  <RUIF.Comp.Nav.CommandHint>Up/Down select - Enter run - Esc unfocus</RUIF.Comp.Nav.CommandHint>
+  <RUIF.Comp.Nav.Time.Paused>Paused (space)</RUIF.Comp.Nav.Time.Paused>
+  <RUIF.Comp.Nav.Time.Normal>Normal (1)</RUIF.Comp.Nav.Time.Normal>
+  <RUIF.Comp.Nav.Time.Fast>Fast (2)</RUIF.Comp.Nav.Time.Fast>
+  <RUIF.Comp.Nav.Time.Superfast>Superfast (3)</RUIF.Comp.Nav.Time.Superfast>
+
+  <!-- Key conflicts -->
+  <RUIF.Comp.Hotkey.NoConflict>Keys: no conflict</RUIF.Comp.Hotkey.NoConflict>
+  <RUIF.Comp.Hotkey.Conflict>! Duplicate keys ({0}) - please rebind</RUIF.Comp.Hotkey.Conflict>
+
+  <!-- Industrial -->
+  <RUIF.Comp.Industrial.Bottleneck>Bottleneck: {0} ({1}%)</RUIF.Comp.Industrial.Bottleneck>
+
+  <!-- Zoom / table density -->
+  <RUIF.Comp.Zoom.Label>Zoom</RUIF.Comp.Zoom.Label>
+  <RUIF.Comp.Zoom.Fit>Fit</RUIF.Comp.Zoom.Fit>
+  <RUIF.Comp.Density.Compact>Compact</RUIF.Comp.Density.Compact>
+  <RUIF.Comp.Density.Normal>Normal</RUIF.Comp.Density.Normal>
+  <RUIF.Comp.Density.Cozy>Cozy</RUIF.Comp.Density.Cozy>
+
+  <!-- Misc / power -->
+  <RUIF.Comp.Points.Remaining>{0} pts left</RUIF.Comp.Points.Remaining>
+  <RUIF.Comp.Points.Overdrawn>{0} over budget</RUIF.Comp.Points.Overdrawn>
+  <RUIF.Comp.Power.Net>Net: {0} W</RUIF.Comp.Power.Net>
+
+  <!-- Official data -->
+  <RUIF.Comp.Wealth.Total>Total wealth {0}</RUIF.Comp.Wealth.Total>
+  <RUIF.Comp.Tale.Spread>Retold x{0}</RUIF.Comp.Tale.Spread>
+  <RUIF.Comp.Bill.Paused>Paused</RUIF.Comp.Bill.Paused>
+  <RUIF.Comp.Bill.Done>Done</RUIF.Comp.Bill.Done>
+  <RUIF.Comp.Bill.InProgress>In progress</RUIF.Comp.Bill.InProgress>
+  <RUIF.Comp.Title.Granted>Grants: {0}</RUIF.Comp.Title.Granted>
+  <RUIF.Comp.Ideo.Members>Members {0}</RUIF.Comp.Ideo.Members>
+  <RUIF.Comp.Ideo.Leader>Leader: {0}</RUIF.Comp.Ideo.Leader>
+  <RUIF.Comp.Caravan.Load>Load</RUIF.Comp.Caravan.Load>
+  <RUIF.Comp.Caravan.Food>Food {0}d - {1}</RUIF.Comp.Caravan.Food>
+  <RUIF.Comp.Policy.AppliedTo>Applied to {0}</RUIF.Comp.Policy.AppliedTo>
+
+  <!-- Relation band / ETA / relative time -->
+  <RUIF.Comp.Relation.Ally>Allied</RUIF.Comp.Relation.Ally>
+  <RUIF.Comp.Relation.Friendly>Friendly</RUIF.Comp.Relation.Friendly>
+  <RUIF.Comp.Relation.Neutral>Neutral</RUIF.Comp.Relation.Neutral>
+  <RUIF.Comp.Relation.Hostile>Hostile</RUIF.Comp.Relation.Hostile>
+  <RUIF.Comp.Relation.DeadHostile>Deadly hostile</RUIF.Comp.Relation.DeadHostile>
+  <RUIF.Comp.Eta.Expired>Expired</RUIF.Comp.Eta.Expired>
+  <RUIF.Comp.Eta.Remaining>{0}d remaining</RUIF.Comp.Eta.Remaining>
+  <RUIF.Comp.Relative.JustNow>just now</RUIF.Comp.Relative.JustNow>
+  <RUIF.Comp.Relative.Minutes>{0}m</RUIF.Comp.Relative.Minutes>
+  <RUIF.Comp.Relative.Hours>{0}h</RUIF.Comp.Relative.Hours>
+  <RUIF.Comp.Relative.Days>{0}d</RUIF.Comp.Relative.Days>
+</LanguageData>

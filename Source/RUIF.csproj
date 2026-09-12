@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>RUIF</RootNamespace>
+    <AssemblyName>RUIF</AssemblyName>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- 输出直接进 Mod 的 Assemblies/（游戏加载目录） -->
+    <OutputPath>$(MSBuildProjectDirectory)\..\Assemblies\</OutputPath>
+    <Nullable>disable</Nullable>
+    <!-- net48 + SDK 8 会重复生成 AssemblyInfo 特性（CS0579），关掉自动生成 -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <Deterministic>true</Deterministic>
+    <!-- 关闭默认 glob，改为显式登记（沿用工程铁律：新增子目录必须登记） -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- 警告即错误：框架代码必须 0 错 0 警 -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- 对外暴露 API 的必要条件：产出 RUIF.xml 文档（消费方 IntelliSense / API 参考生成源）。
+         CS1591=公开成员缺注释、CS1573=参数无对应 param 标签、CS1574=cref 无法解析，
+         均为文档完备性的"待补"提示，不作为发布门禁（其余警告一律保留）。 -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1574</NoWarn>
+    <SourceRoot>$(MSBuildProjectDirectory)\</SourceRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 框架分层。注意：DevTools（组件演示区/Gallery）已于 v2.0.0 **移出编译集** ——
+         框架只提供能力，不内置演示界面；源码保留在 RUIF/_archive/DevTools_Gallery（不参与编译）。 -->
+    <Compile Include="$(SourceRoot)Core\**\*.cs" />
+    <Compile Include="$(SourceRoot)Layout\**\*.cs" />
+    <Compile Include="$(SourceRoot)Components\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 让 dotnet build 无需安装 Visual Studio -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <RimWorldPath Condition="'$(RimWorldPath)' == ''">E:\SteamLibrary\steamapps\common\RimWorld</RimWorldPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- TextAnchor（UI 窗口）位于 TextRenderingModule -->
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- 注意：核心框架【不引用 0Harmony】——UI 全走公开 API，冲突面最小化（方案红线） -->
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+*.cs text diff=csharp
+*.ps1 text
+*.xml text
+*.md text
+*.html text
+*.json text
+*.txt text
+
+*.png binary
+*.dll binary

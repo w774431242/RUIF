@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RUIF · 通用 Mod UI 框架方案（面向 Mod 开发者）</title>
+<style>
+  :root{
+    --bg:#0c111d; --panel:#121829; --panel2:#161d33; --card:#172036;
+    --border:#2c3450; --border-soft:#222a44; --text:#e8e3d8; --muted:#9a93a0;
+    --accent:#d4af37; --accent-soft:rgba(212,175,55,.16); --info:#dab457;
+    --alive:#75c57f; --dead:#c04732; --code:#0a0e18;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;line-height:1.65}
+  header{padding:28px 32px 18px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#101728,#0c111d)}
+  header h1{margin:0;font-size:22px;letter-spacing:.5px}
+  header p{margin:6px 0 0;color:var(--muted);font-size:13px}
+  nav{position:sticky;top:0;z-index:10;background:rgba(12,17,29,.92);
+    backdrop-filter:blur(6px);border-bottom:1px solid var(--border);
+    padding:10px 32px;display:flex;flex-wrap:wrap;gap:8px}
+  nav a{color:var(--muted);text-decoration:none;font-size:12.5px;
+    padding:4px 10px;border:1px solid var(--border-soft);border-radius:14px}
+  nav a:hover{color:var(--accent);border-color:var(--accent)}
+  main{max-width:1080px;margin:0 auto;padding:24px 32px 80px}
+  section{margin:34px 0;scroll-margin-top:60px}
+  h2{font-size:18px;color:var(--accent);border-left:3px solid var(--accent);
+    padding-left:10px;margin-top:0}
+  h3{font-size:14.5px;color:var(--info);margin:20px 0 8px}
+  p,li{font-size:13.5px;color:#cfc9bd}
+  code{background:var(--code);color:#e6d9a8;padding:1px 6px;border-radius:4px;
+    font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:8px;
+    padding:14px 16px;overflow:auto;font-size:12.5px;line-height:1.5}
+  pre code{background:none;padding:0;color:#d7d2c4}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12.8px}
+  th,td{border:1px solid var(--border-soft);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--info);font-weight:600}
+  tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+  .layer{display:flex;gap:0;flex-direction:column;margin:14px 0}
+  .layer .row{display:flex;align-items:stretch;border:1px solid var(--border);
+    border-radius:8px;overflow:hidden;margin-bottom:-1px}
+  .layer .tag{width:120px;flex:0 0 120px;background:var(--panel2);
+    color:var(--accent);font-weight:600;font-size:12.5px;display:flex;
+    align-items:center;justify-content:center;text-align:center;padding:10px}
+  .layer .body{flex:1;padding:10px 14px;background:var(--card);font-size:12.8px}
+  .layer .body b{color:var(--info)}
+  .callout{border:1px solid var(--border);border-left:3px solid var(--alive);
+    background:rgba(117,197,127,.06);padding:12px 16px;border-radius:6px;margin:14px 0}
+  .warn{border-left-color:var(--dead);background:rgba(192,71,50,.07)}
+  .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;
+    border:1px solid var(--border);color:var(--muted);margin-right:4px}
+  .kbd{font-family:monospace;background:var(--panel2);border:1px solid var(--border);
+    border-radius:4px;padding:0 6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>RUIF（RimWorld UI Framework）· 通用 Mod UI 框架方案</h1>
+  <p>面向 <b>全体 RimWorld Mod 开发者</b>的可复用 UI 框架 · 独立框架 Mod 草案 v0.3 · 零业务依赖（PersonalChronicle 为首个消费者）· 设计来源为 PC 档案馆 UI 实战沉淀</p>
+</header>
+<nav>
+  <a href="#goal">1 定位与目标</a>
+  <a href="#now">2 现状盘点</a>
+  <a href="#arch">3 分层架构</a>
+  <a href="#layers">4 各层设计</a>
+  <a href="#theme">5 主题系统</a>
+  <a href="#api">6 API 约定</a>
+  <a href="#tier">7 三档 API</a>
+  <a href="#adapter">8 兼容适配层</a>
+  <a href="#devtools">9 DevTools</a>
+  <a href="#integr">10 集成与分发</a>
+  <a href="#road">11 落地路线图</a>
+  <a href="#eng">12 工程化</a>
+  <a href="#redline">13 红线</a>
+  <a href="#gallery">📕 实例大全</a>
+</nav>
+<main>
+
+<section id="goal">
+  <h2>1 · 定位与目标</h2>
+  <p>RUIF 是一个<strong>通用的、面向所有 RimWorld Mod 开发者的 UI 框架</strong>：以独立框架 Mod 形态分发（与 Harmony / HugsLib 同模式），任何 Mod 引用 RUIF.dll 即可获得统一组件、声明式布局、主题系统与调试工具——让 Mod 作者只声明「要什么组件、什么数据」，不再手写 <code>Rect</code> 布局数学与 <code>GUI.color</code> 配对。</p>
+  <div class="callout">
+    <b>明确边界：</b>这是 <b>RimWorld IMGUI 组件框架</b>，不是 Web 组件库。技术栈是 C# + Verse/Unity GUI，无法与 React/Vue 互通。它的「开发者」是<strong>全体 Mod 作者</strong>——框架零业务依赖，不绑定任何业务 Mod（包括 PersonalChronicle）。
+  </div>
+  <div class="callout">
+    <b>与 PersonalChronicle 的关系：</b>PC 不再是框架的宿主，而是<strong>首个消费者 + 参考实现</strong>。RUIF 的令牌与组件设计从 PC 档案馆 UI 实战沉淀泛化而来，但公共 API 一律 <code>RUIF.*</code>、默认主题为通用风格；PC 侧迁移是路线图 I4 的可选收口，而非框架前提。
+  </div>
+  <h3>设计目标</h3>
+  <ul>
+    <li><b>零业务依赖</b>：不依赖 PersonalChronicle 或任何业务 Mod；数据由调用方注入，框架不读游戏状态。</li>
+    <li><b>声明式布局</b>：窗口提供内容，框架算坐标（解决每窗口手写 <code>rect.y += h</code> 的重复劳动）。</li>
+    <li><b>绘制态零泄漏</b>：任何组件内部 <code>GUI.color</code> / <code>GUI.enabled</code> 修改必须配对恢复，调用方无需关心。</li>
+    <li><b>令牌单一真源</b>：颜色/间距/字号只来自 <code>RUIF.Theme</code>，窗口内禁止 <code>new Color</code>。</li>
+    <li><b>可主题化 + 可扩展</b>：运行时换肤；第三方 Mod 可注册调色板与自定义组件。</li>
+    <li><b>稳定公共 API</b>：面向第三方即「API 即承诺」——SemVer、Adapter 隔离版本、弃用走过渡期。</li>
+    <li><b>可测试边界</b>：布局/令牌层与 Verse GUI 静态解耦，便于单测。</li>
+  </ul>
+</section>
+
+<section id="now">
+  <h2>2 · 设计来源与参考实现</h2>
+  <p>RUIF <b>不依赖、不引用 PersonalChronicle</b>；但其令牌与组件设计从 PC 档案馆 UI 的两层 Design System 实战沉淀泛化而来——那是约 30 个组件、3 套主题、~120 调用点、多轮实机验收过的参考实现。下表盘点参考实现<b>已验证可直接泛化的能力</b>，与 RUIF 需<b>原生新建的框架能力</b>：</p>
+  <table>
+    <tr><th>参考实现单元</th><th>已验证能力（泛化进 RUIF）</th><th>RUIF 需原生补齐（框架能力）</th></tr>
+    <tr>
+      <td><code>UITheme</code></td>
+      <td>颜色/间距/字号/度量令牌；3 套调色板；状态色解析；CJK 行高 22f 经验值</td>
+      <td>注册式调色板 + 组件语义令牌 + <b>通用默认主题（贴合原版风）</b>；公共类型定名 <code>RUIF.Theme</code></td>
+    </tr>
+    <tr>
+      <td><code>ArchiveUiStyle</code></td>
+      <td>兼容转发壳（过渡产物，非能力）</td>
+      <td><b>不设历史包袱</b>：公共 API 一次定型，靠 Adapter 应对游戏版本演化</td>
+    </tr>
+    <tr>
+      <td><code>UIComponents</code>（15 组件）</td>
+      <td>Label / ShadowLabel / Panel / Card / PairCard / SectionTitle / Rule / Border / Pill / Badge / ClickableCard / TintedBox / ProgressBar / TruncateToWidth 的绘制与交互卡模式</td>
+      <td>签名泛化（剥离 PC 业务语义如 FactionCodex）；坐标改由 L4 编排</td>
+    </tr>
+    <tr>
+      <td><code>KpiGrid / Sidebar / Tables</code></td>
+      <td>六宫格 KPI、侧栏导航、表头 / 斑马纹 / 空状态</td>
+      <td>参数化（<code>Grid(cols)</code>）、通用 Table 抽象、统一 Selection 模型</td>
+    </tr>
+    <tr>
+      <td><code>UITextureLibrary</code></td>
+      <td>主题贴图懒加载 + 缺失回退令牌色</td>
+      <td>统一资源层 <code>Texture.ForToken(id)</code></td>
+    </tr>
+  </table>
+  <div class="callout warn">
+    <b>核心缺口一句话：</b>参考实现有「画什么」的组件，没有「放哪、怎么交互、怎么组合」的框架，也没有面向第三方的版本 / 分发 / 扩展机制——这正是 RUIF 要补全的 L0/L4/L5 + 集成层（§10）。
+  </div>
+</section>
+
+<section id="arch">
+  <h2>3 · 分层架构</h2>
+  <p>从下到上 5 层，单向依赖（上层可依赖下层，禁止反向）。参考实现覆盖 L1–L3 的大部分经验；RUIF 五层全部自建——L0/L4/L5 纯新建，L1–L3 在参考实现基础上泛化。</p>
+  <div class="layer">
+    <div class="row"><div class="tag">L0 运行时适配</div><div class="body"><b>GUI 安全封装</b>：<code>Draw.Scope</code>（<code>GUI.color</code>/<code>enabled</code> 栈式保存恢复）、裁剪、滚动视图、坐标换算。所有绘制最终经此层，杜绝泄漏。</div></div>
+    <div class="row"><div class="tag">L1 设计令牌</div><div class="body"><b>UITheme（升级）</b>：注册式调色板、组件语义令牌（button/card/tag）、间距/字号/度量常量、状态色解析器。无绘制、无状态读取。</div></div>
+    <div class="row"><div class="tag">L2 绘制原语</div><div class="body"><b>Primitives</b>：Box / Text / Divider / Texture / Rule。纯几何，1 个 Rect 入参，经 L0 画。</div></div>
+    <div class="row"><div class="tag">L3 复合组件</div><div class="body"><b>Controls</b>：Button / Card / Tag / Badge / ProgressBar / KpiCell / Table / Sidebar。组合 L2，携带轻量视觉状态（hover），<i>不含</i>业务交互。</div></div>
+    <div class="row"><div class="tag">L4 布局编排</div><div class="body"><b>Layout</b>：Stack(V/H) / Grid / Section / ScrollView / Spacer。输入「内容+约束」，输出各子项 <code>Rect</code>，窗口不再手写坐标。</div></div>
+    <div class="row"><div class="tag">L5 交互行为</div><div class="body"><b>Behavior</b>：Selection 模型、Command（点击→回调）、Hover/Active 视觉态、键盘导航、与调用方状态/数据绑定（框架不关心数据来源）。窗口只 <code>Bind(data)</code>。</div></div>
+  </div>
+</section>
+
+<section id="layers">
+  <h2>4 · 各层设计</h2>
+
+  <h3>L0 · 运行时适配层 <span class="pill">新增</span></h3>
+  <p>所有 <code>GUI.*</code> 副作用集中在此，提供栈式作用域，保证「改了必恢复」：</p>
+  <pre><code>// 调用方永远不必配对 finally
+using (Draw.Color(accent))        // 压栈旧色，退出恢复
+using (Draw.Enabled(false))       // 禁用态
+using (Draw.Clip(rect))           // 裁剪区域
+{
+    Widgets.DrawBoxSolid(rect, color);
+}
+
+// 滚动视图：返回视口 + 自动处理 scrollPosition
+Rect view = Layout.Scroll(outer, contentSize, ref scroll);</code></pre>
+  <div class="callout">参考实现里每个组件都手写「<code>try{ GUI.color=.. }finally{ GUI.color=prev }</code>」配对样板——正是 L0 要统一收编、让组件作者彻底摆脱的重复劳动。</div>
+  <div class="callout warn">
+    <b>L0 必须内建的 RimWorld 1.6 约束（吸收自 RUI 评估：</b>一个 RW UI 框架若不包住这些坑，组件作者每行都在踩雷<b>）：</b>
+    <ul style="margin:6px 0 0">
+      <li><code>Listing_Standard.RadioButton(string,bool)</code> <b>返回 bool，不能 ref</b>；1.6 <b>无 RadioButtonGroup</b>，单选组须自己循环。</li>
+      <li><code>Widgets.ButtonText</code> <b>无 disabled 参数</b>——禁用用 <code>active:false</code>。</li>
+      <li><code>GUI.color</code> 修改<b>必须配对恢复</b>，否则染色泄漏到后续所有控件（全游戏范围）。</li>
+      <li><code>TipSignal</code> 第二参是<b>延迟秒数</b>，不是开关。</li>
+      <li><b>CJK 行高经验值 22f</b>（<code>UITheme.FontBodyLineHeight</code>），不能套 Web 字体度量。</li>
+      <li>1.6 <code>Widgets.DrawBoxSolid</code> 内部会<b>重置 GUI.color</b> 为传入色——想画半透明 tint 必须直接传 tint 色（<code>TintedBox</code> 踩过的坑）。</li>
+    </ul>
+  </div>
+
+  <h3>L1 · 设计令牌（公共类型 <code>RUIF.Theme</code>）</h3>
+  <ul>
+    <li><b>注册式调色板</b>：<code>RUIF.Theme.Register("myTheme", palette)</code>；内置 <b>Vanilla（贴合原版风，默认）</b>与 <b>Dark</b> 两个通用主题，Epic/Gothic/Steampunk 作为<b>示例主题</b>随源码提供（示范第三方如何注入皮肤）。</li>
+    <li><b>组件语义令牌</b>：按组件拆色（<code>Button.Bg/Hover/Text</code>、<code>Card.Bg/Border/Accent</code>），由调色板派生，调用方不猜色。</li>
+    <li><b>间距/字号/度量</b>：<code>SpaceXs..Lg</code>、<code>FontBodyLineHeight=22f</code> 等常量（CJK 行高经验值已在参考实现验证）。</li>
+    <li><b>通用状态解析</b>：<code>StateColor(positive,negative)</code> 内置；业务专属色解析（职称/勋章/事件分类等）属于消费 Mod，经<b>解析器扩展点</b>注册而非内置。</li>
+  </ul>
+
+  <h3>L2 · 绘制原语 <span class="pill">参考实现泛化</span></h3>
+  <p><code>Panel / Card / Rule / Border / Pill / Badge</code> 等下沉为无状态的 L2 原语，签名统一 <code>(Rect, ...token)</code>，内部只调 L0。</p>
+
+  <h3>L3 · 复合组件（Controls）</h3>
+  <p>在参考实现组件基础上补两类：</p>
+  <ul>
+    <li><b>有交互的 Control</b>：<code>Button(rect, label).OnClick(action)</code> 内部用 L5 的 Command，调用方不再手写 if-click 判断。</li>
+    <li><b>参数化复合</b>：<code>Grid(cols).Add(cell)</code> 取代固定格数的专用网格；<code>Table</code> 抽象为通用组件，参考实现的 TableHeader/ZebraRow/EmptyState 成为其特例。</li>
+  </ul>
+
+  <h3>L4 · 布局编排 <span class="pill">新增 · 最关键</span></h3>
+  <pre><code>// 窗口不再算坐标，只声明结构
+var root = Layout.VStack(outer, gap: SpaceSm);
+root.Add(Section("概览", () => {
+    Layout.HStack().Add(kpi1).Add(kpi2).Add(kpi3);
+}));
+root.Add(Layout.Grid(cols: 2, rowH: 110f)
+    .Add(cardA).Add(cardB).Add(cardC));
+root.Add(ScrollView(content, ref scroll));
+root.Build();   // 计算所有 Rect 并绘制</code></pre>
+  <div class="callout">收益：消除每个窗口里重复的 <code>rect.y += height + gap</code> 布局循环，且天然支持封装行高契约（大卡≥110f / 正文行 22f 等，CJK 安全值已在参考实现验证）。</div>
+
+  <h3>L5 · 交互行为 <span class="pill">新增</span></h3>
+  <ul>
+    <li><b>Selection</b>：<code>Selection&lt;T&gt;</code> 模型，侧栏/列表从「返回 bool」升级为绑定选中项。</li>
+    <li><b>Command</b>：点击/回车归一为 <code>ICommand</code>，组件注册回调，窗口只关心语义动作。</li>
+    <li><b>数据绑定</b>：组件 <code>.Bind(data)</code> 接收调用方注入的纯数据/快照；框架不读游戏状态、不做业务聚合（排序与 null-guard 归调用方）。</li>
+    <li><b>键盘导航</b>：容器内 Tab/方向键焦点环，为 a11y 打底。</li>
+  </ul>
+</section>
+
+<section id="theme">
+  <h2>5 · 主题系统</h2>
+  <ul>
+    <li><b>运行时换肤</b>：<code>RUIF.Theme.Apply(id)</code>——先查注册表，未注册回退默认主题（fail-safe：坏配置不 brick UI）。</li>
+    <li><b>持久化归消费 Mod</b>：框架只提供 <code>Apply(id)</code> 与当前主题查询；主题选择存进哪个 Mod 的 Settings 由消费方决定。</li>
+    <li><b>第三方注册</b>：暴露 <code>RUIF.Theme.Register</code> 与 <code>Palette.Builder</code>，任意 Mod 可注入调色板，RUIF 不独占皮肤。</li>
+    <li><b>纹理主题</b>：1.6 贴图在 asset bundle，只能 XML 乘法染色——L0 资源层提供 <code>Texture.ForToken(id)</code> 统一取色，避免散落硬编码色值；贴图缺失一律回退令牌色。</li>
+  </ul>
+</section>
+
+<section id="api">
+  <h2>6 · 命名与 API 约定</h2>
+  <table>
+    <tr><th>约定</th><th>规则</th><th>示例</th></tr>
+    <tr><td>命名空间</td><td>独立 Mod：<code>RUIF.*</code>（如 <code>RUIF.Layout</code>）；过渡期 PersonalChronicle 侧沿用 <code>Archive.UI</code></td><td><code>RUIF.Layout.VStack</code></td></tr>
+    <tr><td>令牌只读</td><td>窗口内禁止 <code>new Color</code>；要色先加令牌</td><td>✅ <code>UITheme.Card</code> / ❌ <code>new Color(0,0,0)</code></td></tr>
+    <tr><td>绘制态</td><td>经 <code>Draw.Scope</code>，禁止窗口内裸改 <code>GUI.color</code></td><td><code>using(Draw.Color(c))</code></td></tr>
+    <tr><td>行高契约</td><td>大卡≥110f / StatCell≥64f / Small≥22f / Medium≥28f</td><td>L4 容器强制校验</td></tr>
+    <tr><td>方法体量</td><td>单方法 &lt;60 行、单文件 &lt;800 行</td><td>框架代码纪律，超限即拆</td></tr>
+    <tr><td>数据来源</td><td>数据由调用方注入（纯值/快照）；组件内禁读游戏状态、禁排序/null-guard</td><td><code>.Bind(data)</code></td></tr>
+  </table>
+</section>
+
+<section id="tier">
+  <h2>7 · 三档 API 设计标准 <span class="pill">吸收自 RUI</span></h2>
+  <table>
+    <tr><th>档位</th><th>目标</th><th>示例</th><th>特点</th></tr>
+    <tr><td><b>Minimal 最小</b></td><td>5 秒能用</td><td><code>RUIF.Button("开始")</code></td><td>默认主题/尺寸、最少参数</td></tr>
+    <tr><td><b>Advanced 进阶</b></td><td>正式 Mod UI</td><td><code>RUIF.Button(...).Style(...).Tip(...)</code></td><td>组合属性、事件、绑定</td></tr>
+    <tr><td><b>Expert 高阶</b></td><td>复杂系统</td><td><code>RUIF.Table(...).Virtualized().MultiSelect()</code></td><td>状态、数据源、虚拟化、扩展点</td></tr>
+  </table>
+  <div class="callout">同一组件向上兼容：<b>Minimal 是 Advanced 的默认值特例，Advanced 是 Expert 的默认配置特例</b>。禁止「简单用法要先学一堆参数」——这是组件库 DX 的第一道门槛。</div>
+</section>
+
+<section id="adapter">
+  <h2>8 · 兼容性适配层 <span class="pill">吸收自 RUI</span></h2>
+  <p>把 Verse / Unity API 收进 Adapter，<b>不泄漏到公共 API</b>；未来游戏版本改 API 时只动 Adapter，不动任何组件。</p>
+  <pre><code>RUIF 公共 API
+   │
+   ▼
+RUIF.Internal
+   │
+   ▼
+RimWorld 1.6 Adapter
+   ├── Verse.Widgets
+   ├── WindowStack
+   ├── Tooltip / TipSignal
+   ├── GUI / UnityEngine
+   └── RimWorld-specific helpers</code></pre>
+  <div class="callout">与 L0 运行时适配层是同一件事的两面：<b>L0 负责「安全封装」，Adapter 负责「版本隔离」</b>。组件层永远看不到 <code>Widgets.*</code>。</div>
+</section>
+
+<section id="devtools">
+  <h2>9 · DevTools 规划 <span class="pill">吸收自 RUI</span></h2>
+  <table>
+    <tr><th>工具</th><th>用途</th><th>现状</th></tr>
+    <tr><td><b>Component Gallery</b></td><td>全组件可交互预览 + 三档代码</td><td>✅ 已有 <code>RUIF/docs/UI框架实例大全.html</code></td></tr>
+    <tr><td>UI Inspector</td><td>点击查看节点类型 / Bounds / Padding / Style / Tip / State</td><td>待建</td></tr>
+    <tr><td>Layout Debugger</td><td>显示 Rect、占用、溢出、对齐与 Scroll 区域</td><td>待建</td></tr>
+    <tr><td>Performance Profiler</td><td>按组件统计 Draw / Measure / Layout 耗时与分配</td><td>待建（可借鉴参考实现的 PerfProbe 模式）</td></tr>
+    <tr><td>Theme Preview</td><td>实时看 token 修改对全部标准组件的影响</td><td>设计已含（注册式主题 + Gallery）</td></tr>
+  </table>
+</section>
+
+<section id="gallery">
+  <h2>📕 配套实例大全</h2>
+  <div class="callout">
+    <b><code>RUIF/docs/UI框架实例大全.html</code></b> —— 本方案的全量可交互实例：
+    <ul style="margin:6px 0 0">
+      <li><b>原生 Widgets 全量</b>（从参考实现源码实际调用取证，非凭记忆罗列）；</li>
+      <li><b>参考实现组件全量</b>（PersonalChronicle 的令牌 / UIComponents / KpiGrid / Sidebar / Tables / 贴图库，作为 RUIF 组件设计的实证）；</li>
+      <li>每个组件配 <b>最小 / 进阶 / 高阶</b> 三档代码 + 实时主题切换预览；</li>
+      <li>末尾附 <b>RW 1.6 铁律对照表</b>（错写 vs 正确写法）。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="integr">
+  <h2>10 · 集成与分发（面向 Mod 开发者）</h2>
+  <h3>接入模式：框架 Mod（与 Harmony / HugsLib 同模式）</h3>
+  <p>RimWorld 会加载所有已启用 Mod 的程序集，因此 <b>RUIF 以独立框架 Mod 分发，全游戏只加载一份 RUIF.dll</b>；消费 Mod 只引用、不内嵌，从根上避免「多 Mod 各带一份不同版本 dll」的经典冲突。</p>
+  <ul>
+    <li><b>消费 Mod 声明依赖</b>：About.xml 写 <code>modDependencies</code> + <code>loadAfter</code>（packageId <code>PersonalChronicle.RUIFramework</code>）；csproj 引用 RUIF.dll 但<b>发布包内不携带该 dll</b>。</li>
+    <li><b>版本探测与降级</b>：RUIF 提供 <code>RUIF.Version</code> 常量与运行时探测；消费 Mod 做最低版本断言——低版本环境给出可读提示或功能降级，而不是炸 null。</li>
+    <li><b>SemVer + 弃用过渡</b>：主版本内公共 API 冻结；删改 API 先 <code>[Obsolete]</code> 保留一个主版本，并在 changelog 标注迁移路径。</li>
+  </ul>
+  <h3>扩展点（第三方可注册，RUIF 不独占）</h3>
+  <ul>
+    <li><b>主题注册</b>：<code>RUIF.Theme.Register(id, palette)</code>——任意 Mod 注入调色板。</li>
+    <li><b>组件注册</b>：自定义 Control 注册进 Gallery，自动获得游戏内预览与三档文档位。</li>
+    <li><b>语义解析扩展</b>：业务语义色（稀有度 / 品质 / 阵营等）经解析器扩展点挂接，框架只内置通用解析。</li>
+  </ul>
+  <h3>本地化与分发</h3>
+  <ul>
+    <li><b>本地化</b>：框架内置文案走 Keyed（<code>RUIF.UI.*</code>）；组件 API 一律收<b>已翻译字符串</b>，不替消费 Mod 做翻译决策。</li>
+    <li><b>分发</b>：Steam Workshop（框架 Mod 本体）+ GitHub Release（dll + 离线文档）+ 本地引用开发模式；发布区路径 TBD，启用前按「两区同步 + 哈希校验」约定执行。</li>
+    <li><b>冲突面控制</b>：核心框架<b>不打 Harmony 补丁</b>（如确需，拆独立可选模块），把与其他 Mod 的冲突面压到最低。</li>
+  </ul>
+</section>
+
+<section id="road">
+  <h2>11 · 落地路线图</h2>
+  <table>
+    <tr><th>迭代</th><th>范围</th><th>交付</th><th>兼容策略</th></tr>
+    <tr>
+      <td><b>I1 框架骨架</b></td>
+      <td>独立 Mod 工程（RUIF.Core.dll）+ L0 运行时适配 + L4 布局骨架</td>
+      <td><code>Draw.Scope</code>、<code>Layout.VStack/HStack/Grid/ScrollView</code>、Vanilla 默认主题令牌</td>
+      <td>新工程零历史包袱；PersonalChronicle 不动</td>
+    </tr>
+    <tr>
+      <td><b>I2 组件层</b></td>
+      <td>L1 语义令牌 + L2/L3 组件（参考实现泛化）</td>
+      <td>Button/Card/Pill/Badge/ProgressBar/Table/Sidebar 等公共组件 + 三档 API 形态</td>
+      <td>API 未冻结，可随早期反馈调整；变更必记 changelog</td>
+    </tr>
+    <tr>
+      <td><b>I3 主题/交互/DevTools</b></td>
+      <td>注册式主题 + L5 行为 + 游戏内 Gallery</td>
+      <td><code>Theme.Register</code>、<code>Selection/Command</code>、键盘导航、组件 Gallery</td>
+      <td>第三方可开始注册主题与自定义组件</td>
+    </tr>
+    <tr>
+      <td><b>I4 发布收口</b></td>
+      <td>API 冻结候选 + Workshop/GitHub 发布 + 接入文档</td>
+      <td>示例消费 Mod、版本探测、SemVer 承诺生效</td>
+      <td>首个消费者接入：PersonalChronicle 迁移（可选，另行排期 + 全量回归）</td>
+    </tr>
+  </table>
+  <div class="callout">建议从 <b>I1</b> 起步：L0/L4 纯新建、不触碰任何现有代码，风险最低、收益（消除布局样板）立竿见影。每迭代保持「编译 0 错 0 警 + 单测通过」闸门。</div>
+</section>
+
+<section id="eng">
+  <h2>12 · 工程化与验收</h2>
+  <ul>
+    <li><b>编译</b>：独立 csproj（net48 / x64，按需引用 Assembly-CSharp / Verse / UnityEngine / 0Harmony），0 错 0 警；与 PersonalChronicle 工程互不依赖。</li>
+    <li><b>单测</b>：布局层（L4）与令牌层（L1）与 Verse GUI 解耦，可用 NUnit 测坐标计算与令牌解析；交互层用模拟事件。</li>
+    <li><b>文档</b>：每个 Control 配「签名 + 参数 + 示例 + 截图/示意」，沉淀到 <code>RUIF/docs/</code>；对外 API 变更必记 changelog（面向第三方）。</li>
+    <li><b>契约回归</b>：换肤后全组件回归——无 <code>new Color</code> 残留（grep 红线）、无绘制态泄漏、贴图缺失回退正常。</li>
+    <li><b>红线闸门</b>：AI 工具只进开发流；框架不读游戏状态（数据由调用方注入）。</li>
+  </ul>
+</section>
+
+<section id="redline">
+  <h2>13 · 红线（重申）</h2>
+  <div class="callout warn">
+    <ul style="margin:0">
+      <li><b>零业务依赖</b>：框架不引用任何业务 Mod；组件内<strong>绝不</strong>读 pawn/map/stat、不做业务聚合——数据由调用方注入。</li>
+      <li><b>公共 API 即承诺</b>：<code>RUIF.*</code> 不泄漏 Verse/Unity 类型；SemVer + <code>[Obsolete]</code> 过渡；未冻结前变更必记 changelog。</li>
+      <li><b>单一程序集</b>：消费 Mod 只引用、不内嵌 RUIF.dll；核心框架不打 Harmony 补丁（可选模块除外）。</li>
+      <li>窗口内禁止裸 <code>GUI.color</code> 与 <code>new Color</code>；一切经 L0/L1。</li>
+      <li>所有 AI 工具只进开发流，不进 Mod 运行时（沿用工程铁律）。</li>
+      <li>设计期不进任何发布区；RUIF 发布区路径 TBD，启用后按两区同步 + 哈希校验约定执行。</li>
+    </ul>
+  </div>
+  <p style="color:var(--muted);font-size:12px;margin-top:24px">v0.3（2026-09-08）：按「通用框架、面向 Mod 开发者」重写定位——PersonalChronicle 从宿主降为首个消费者；§10 集成与分发、扩展点、版本承诺为本次新增。设计来源证据见 §2 与 <code>RUIF/docs/RUI_Framework评估与UIKit对齐.md</code>。下一步：细化 I1 的 <code>Draw.Scope</code> 与 <code>Layout.VStack</code> 接口签名。</p>
+</section>
+
+</main>
+</body>
+</html>

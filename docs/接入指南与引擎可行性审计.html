@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RUIF 接入指南 · 引擎可行性审计（不失真承诺）</title>
+<style>
+:root{--bg:#0c111d;--panel:#121829;--panel2:#161d33;--card:#172036;--border:#2c3450;
+--border-soft:#222a44;--text:#e8e3d8;--muted:#9a93a0;--accent:#d4af37;--info:#dab457;
+--alive:#75c57f;--dead:#c04732;--warn:#d29922;--code:#0a0e18}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+font:14px/1.7 "Segoe UI",system-ui,"Microsoft YaHei",sans-serif}
+header{padding:28px 32px 18px;border-bottom:1px solid var(--border);
+background:linear-gradient(180deg,#101728,#0c111d)}
+header h1{margin:0;font-size:21px;letter-spacing:.5px}
+header p{margin:6px 0 0;color:var(--muted);font-size:13px}
+nav{position:sticky;top:0;z-index:10;background:rgba(12,17,29,.93);backdrop-filter:blur(6px);
+border-bottom:1px solid var(--border);padding:10px 32px;display:flex;flex-wrap:wrap;gap:8px}
+nav a{color:var(--muted);text-decoration:none;font-size:12.5px;padding:4px 10px;
+border:1px solid var(--border-soft);border-radius:14px}
+nav a:hover{color:var(--accent);border-color:var(--accent)}
+main{max-width:1060px;margin:0 auto;padding:24px 32px 80px}
+section{margin:34px 0}
+h2{font-size:18px;color:var(--accent);border-left:3px solid var(--accent);padding-left:10px;margin-top:0}
+h3{font-size:14.5px;color:var(--info);margin:20px 0 8px}
+p,li{font-size:13.5px;color:#cfc9bd}
+code{background:var(--code);color:#e6d9a8;padding:1px 6px;border-radius:4px;
+font-family:Consolas,monospace;font-size:12.5px}
+pre{background:var(--code);border:1px solid var(--border);border-radius:8px;
+padding:14px 16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0;color:#d7d2c4}
+.cm{color:#6A9955}.kw{color:#C586C0}.st{color:#CE9178}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12.8px}
+th,td{border:1px solid var(--border-soft);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--info);font-weight:600}
+tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+.callout{border:1px solid var(--border);border-left:3px solid var(--alive);
+background:rgba(117,197,127,.06);padding:12px 16px;border-radius:6px;margin:14px 0}
+.warn{border-left-color:var(--warn);background:rgba(210,153,34,.08)}
+.danger{border-left-color:var(--dead);background:rgba(192,71,50,.08)}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 9px;border-radius:10px;margin-right:2px}
+.b-ok{background:rgba(117,197,127,.15);color:var(--alive);border:1px solid var(--alive)}
+.b-part{background:rgba(210,153,34,.15);color:var(--warn);border:1px solid var(--warn)}
+.b-no{background:rgba(192,71,50,.15);color:var(--dead);border:1px solid var(--dead)}
+.step{display:flex;gap:12px;margin:14px 0;align-items:flex-start}
+.step .n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--accent);color:#101019;
+font-weight:800;display:flex;align-items:center;justify-content:center}
+.mut{color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>RUIF 接入指南 · 引擎可行性审计</h1>
+  <p>消费 Mod 如何调用 RUIF（三步接入 + 代码契约）· 每个能力的引擎实现等级逐项审计（✅ 原生 / ⚠️ 有代价 / ❌ 不承诺）</p>
+</header>
+<nav>
+  <a href="#how">一 · 如何调用 RUIF</a>
+  <a href="#quick">二 · 最小可用示例</a>
+  <a href="#tier">三 · 三档 API</a>
+  <a href="#ext">四 · 配色 / 本地化</a>
+  <a href="#ship">五 · 发布检查清单</a>
+  <a href="#audit">六 · 引擎可行性审计</a>
+  <a href="#promise">七 · 不失真承诺</a>
+</nav>
+<main>
+
+<section id="how">
+  <h2>一 · 消费 Mod 如何调用 RUIF</h2>
+  <p>RUIF 是<strong>框架 Mod</strong>（与 Harmony / HugsLib 同模式）：玩家订阅 RUIF Mod 后，游戏启动即加载全游戏唯一的 <code>RUIF.dll</code>；你的 Mod <b>只引用、不内嵌</b>。当前版本 <b>v1.0.1</b>，公共 API 全量清单见随包 <code>DevDocs/API参考.md</code>（自动生成：73 个公开类型 / 435 个公开成员）。</p>
+
+  <div class="callout">
+    <b>第一步不是写代码，是选依赖模式</b> —— 二选一，<b>混用就是"假降级"</b>：
+    <table>
+      <tr><th>模式</th><th>About.xml</th><th>探测方式</th><th>适合</th></tr>
+      <tr><td><b>硬依赖</b>（推荐）</td><td>写 <code>modDependencies</code> + <code>loadAfter</code></td><td>直接调 <code>RUIF.Api.IsAvailable(minVersion)</code>，只做<b>版本</b>门控</td><td>没有框架就没有意义的功能</td></tr>
+      <tr><td><b>软依赖</b></td><td><b>不写</b> <code>modDependencies</code>，只写 <code>loadAfter</code></td><td>反射扫 <code>AppDomain</code> 找 <code>RUIF.Api</code>；<b>所有 RUIF 调用隔离到独立类型</b>，方法标 <code>[MethodImpl(NoInlining)]</code></td><td>有原生兜底路径的功能</td></tr>
+    </table>
+    <b>为什么不能"声明硬依赖 + 又写 else 降级"：</b><code>RUIF.Api</code> 类型本身就在 <code>RUIF.dll</code> 里。框架缺失时，任何<strong>会被 JIT 的代码路径</strong>出现 <code>Api.Xxx</code>，就会在<b>方法编译阶段</b>抛 <code>FileNotFoundException</code> / <code>TypeLoadException</code>——<code>try/catch</code> 拦不住，你的 else 分支<b>永远不会执行</b>。这不是风格问题，是"降级到底有没有发生过"的问题。
+  </div>
+
+  <div class="step"><div class="n">1</div><div>
+    <b>硬依赖：About.xml 声明依赖</b> —— 玩家未启用 RUIF 时，游戏会在 Mod 列表明确提示，而不是让 UI 静默炸掉：
+<pre>&lt;modDependencies&gt;
+  &lt;li&gt;
+    &lt;packageId&gt;PersonalChronicle.RUIFramework&lt;/packageId&gt;
+    &lt;displayName&gt;RUI Framework&lt;/displayName&gt;
+  &lt;/li&gt;
+&lt;/modDependencies&gt;
+&lt;loadAfter&gt;
+  &lt;li&gt;PersonalChronicle.RUIFramework&lt;/li&gt;
+&lt;/loadAfter&gt;</pre>
+    此时框架必然已加载，<code>IsAvailable</code> 只剩下"够不够新"这一个问题：
+<pre><span class="cm">// Mod 类构造器</span>
+<span class="kw">public</span> MyMod(ModContentPack content) : <span class="kw">base</span>(content)
+{
+    <span class="kw">if</span> (!RUIF.Api.IsAvailable(<span class="st">"1.0"</span>))
+        Log.Warning(<span class="st">"[MyMod] RUIF 版本过低，界面降级为原生 Widgets。"</span>);
+}</pre>
+  </div></div>
+
+  <div class="step"><div class="n">2</div><div>
+    <b>csproj 引用 RUIF.dll（不随包分发）</b> —— <code>&lt;Private&gt;false&lt;/Private&gt;</code> 确保你的发布包 Assemblies 里<b>没有</b> RUIF.dll（内嵌会与其他 Mod 的副本冲突）：
+<pre>&lt;Reference Include="RUIF"&gt;
+  &lt;HintPath&gt;路径/RUIF/Assemblies/RUIF.dll&lt;/HintPath&gt;
+  &lt;Private&gt;false&lt;/Private&gt;
+&lt;/Reference&gt;</pre>
+  </div></div>
+
+  <div class="step"><div class="n">3</div><div>
+    <b>软依赖：探测用反射，调用要隔离</b> —— 主路径（构造器 / Update / 静态构造）<b>不得</b>出现任何 RUIF 类型：
+<pre><span class="cm">// ① 探测：只用字符串 + 反射。本类型不引用 RUIF，所以框架缺失时它照样能加载</span>
+<span class="kw">bool</span> available = <span class="kw">false</span>;
+<span class="kw">foreach</span> (<span class="kw">var</span> a <span class="kw">in</span> AppDomain.CurrentDomain.GetAssemblies())
+    <span class="kw">if</span> (a.GetName().Name == <span class="st">"RUIF"</span>)
+    {   <span class="cm">// a.GetType("RUIF.Api") → GetMethod("IsAvailable").Invoke(null, new object[] { "1.0" })</span>
+        available = <span class="kw">true</span>;
+    }
+
+<span class="cm">// ② 隔离：唯一允许出现 RUIF 类型的地方，方法必须 NoInlining</span>
+<span class="cm">//    否则 JIT 可能把调用内联进调用方 → 调用方在编译期就需要 RUIF 类型 → 照样抛异常</span>
+[MethodImpl(MethodImplOptions.NoInlining)]
+<span class="kw">static void</span> OpenMyWindow() =&gt; Find.WindowStack.Add(<span class="kw">new</span> Dialog_MyWindow());</pre>
+    框架不再随包附带可编译模板工程（旧 <code>Sample/</code> 已随换肤层移除）；软依赖的探测 / 隔离写法见上，绘制写法见 §二。
+  </div></div>
+
+  <div class="callout"><b>降级是实机结论，不是纸面兜底：</b>软依赖模式下，UI 代码按「数据准备」与「绘制」分离，绘制层只读一个你缓存的 <code>bool</code>（RUIF 路径 / Listing_Standard 原生路径）。<b>禁用 RUIF 后仍能启动、能操作，才算降级成立</b>；没实机测过就在文档里写 NOT RUN，不许写"已降级"。</div>
+</section>
+
+<section id="faq-model">
+  <h2>〇 · 先澄清：RUIF 是"预设实例"吗？</h2>
+  <div class="callout">
+    <b>答：</b>第三方 Mod <b>直接调用</b>（普通程序集引用，编译期引用 dll + 运行期游戏加载唯一一份，像调 Harmony 一样 <code>using RUIF;</code>）。但 RUIF 预设的是<b>令牌 / 度量 / 组件行为规范</b>，<b>不是预设 UI 实例</b>——UI 结构由每个 Mod 在自己的绘制代码里声明。三种东西归属不同：
+    <table>
+      <tr><th>东西</th><th>归属</th><th>要点</th></tr>
+      <tr><td>无状态组件（Button/Card/Pill…，Minimal/Advanced）</td><td>RUIF 提供 API，<b>无实例</b></td><td>即时模式：每帧调用当帧绘制，数据你传</td></tr>
+      <tr><td>有状态组件（Table/Selection…，Expert）</td><td><b>你 new、你持有</b></td><td>实例存你 Mod 类的字段；<b>别存 Window 里</b>（窗口关掉即弃）</td></tr>
+      <tr><td>全局静态（<code>RUIF.Api</code> / 只读令牌 <code>RUIF.Tokens</code>）</td><td>RUIF 全局静态</td><td>唯一"预设"的部分；令牌为固定只读值，框架不含可切换主题</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="quick">
+  <h2>二 · 最小可用示例（真实签名）</h2>
+  <p>一个标准原版窗口内调用 RUIF —— <code>Window</code> 仍是原版类型，RUIF 只接管 <b>DoWindowContents 里的布局与绘制</b>。下面每个调用都对应 <code>API参考.md</code> 里的真实签名（本示例已编译通过）：</p>
+<pre><span class="kw">public class</span> <span class="st">Dialog_Example</span> : Window
+{
+    <span class="kw">public override</span> Vector2 InitialSize =&gt; <span class="kw">new</span> Vector2(520f, 420f);
+
+    <span class="kw">public override void</span> DoWindowContents(Rect inRect)
+    {
+        <span class="cm">// L4 布局：只声明结构，Rect 由框架算（struct 游标，零堆分配；超出容器自动裁剪）</span>
+        <span class="kw">var</span> col = RUIF.Layout.Column(inRect, RUIF.Tokens.SpaceSm);
+        Rect head = col.Take(30f);
+
+        <span class="cm">// L1 令牌 + L2 原子：颜色一律取自 Tokens，绝不裸写 new Color / 裸改 GUI.color</span>
+        RUIF.Draw.Label(head, <span class="st">"例示窗口"</span>, RUIF.Tokens.FontValue, RUIF.Tokens.Text, TextAnchor.MiddleLeft);
+
+        Rect body = RUIF.Atoms.SectionFrame(col.Rest, <span class="st">"Example"</span>);
+        Rect card = RUIF.Layout.Inset(body, RUIF.Tokens.CardPadX, RUIF.Tokens.CardPadY);
+        RUIF.Draw.Box(card, RUIF.Tokens.Card);
+        RUIF.Draw.Border(card, RUIF.Tokens.BorderSoft);
+        RUIF.Draw.Label(card, <span class="st">"内容画在你的 DoWindowContents 里"</span>, RUIF.Tokens.FontBody, RUIF.Tokens.Text, TextAnchor.MiddleLeft);
+    }
+}</pre>
+  <div class="callout">
+    <b>状态（v1.0.0）：</b>本示例的每个 API 都存在于 <code>DevDocs/API参考.md</code>（该清单由 <code>_scripts/gen_api_reference.ps1</code> 反射生成，与 dll 同源），并已在框架源码工程内编译通过。<br>
+    <b>仍未做的</b>：<code>using (var col = RUIF.VStack(...))</code> 式布局 DSL 与链式 <code>.Tip().OnClick()</code>（见 §三）——那是 I0 的设计承诺，v1.0.0 未实施，<b>不要据此编码</b>。
+  </div>
+</section>
+
+<section id="tier">
+  <h2>三 · 三档 API（设计承诺 · 尚未实施）</h2>
+  <div class="warn" style="border:1px solid var(--border);border-left:3px solid var(--warn);background:rgba(210,153,34,.08);padding:12px 16px;border-radius:6px">
+    <b>⚠️ 现存差异（必读）：</b>下表是 I0 期的<b>接口设计意图，v1.0.0 尚未实施</b>。当前实际 API 是<b>静态方法 + struct 布局游标</b>（<code>RUIF.Layout.Column(rect, gap)</code> → <code>VStack.Take(h)</code>；组件为静态方法，数据由调用方注入），<b>没有</b>顶层 <code>Button(...)</code> 快捷函数，也没有链式 <code>.Tip().Disabled().OnClick()</code>。<br>
+    编码唯一依据 = <code>DevDocs/API参考.md</code>；本节保留原文只为让"接口设计意图"可追溯，<b>不要据此写代码</b>。
+  </div>
+  <table>
+    <tr><th>档位</th><th>写法</th><th>适合</th></tr>
+    <tr><td><b>Minimal</b></td><td><code>Button(rect, "开始")</code></td><td>5 秒能用：默认配色、默认尺寸</td></tr>
+    <tr><td><b>Advanced</b></td><td><code>Button(rect, "开始").Tip("提示").Disabled(!canStart).OnClick(Start)</code></td><td>正式 Mod UI：组合属性、事件</td></tr>
+    <tr><td><b>Expert</b></td><td><code>Table(data).Virtualized().Sortable().MultiSelect().OnSelectionChanged(cb)</code></td><td>复杂系统：数据源、虚拟化、扩展点</td></tr>
+  </table>
+  <p class="mut">设计意图：Minimal 是 Advanced 的默认值特例，Advanced 是 Expert 的默认配置特例——向上兼容。若将来实施，将作为 v2.0 的<b>新增</b>表面，不破坏现有静态方法 API（v1.0.0 起冻结）。</p>
+</section>
+
+<section id="ext">
+  <h2>四 · 配色与本地化</h2>
+    <h3>配色（框架不含换肤引擎）</h3>
+    <p>框架<b>不提供</b>主题注册 / 运行时换肤：旧 <code>Theme.Register</code> / <code>Theme.Apply</code> 系列 API 已于 v1.0.0 公开发布前整体移除。外观颜色一律取只读令牌 <code>RUIF.Tokens.*</code>。想在组件之外使用自定义配色，就在你自己的 Mod 里持有颜色常量并自行管理，<b>不要</b>把框架令牌当作可切换主题。</p>
+  <h3>本地化约定</h3>
+  <ul>
+    <li>组件 API 一律收<strong>已翻译字符串</strong>：你传 <code>"MyMod.Title".Translate()</code> 的结果，框架不替你做翻译决策；</li>
+    <li>框架组件自身不产出面向玩家的文案；若有则走框架 Mod 的 Languages 目录（Keyed）。</li>
+  </ul>
+</section>
+
+<section id="ship">
+  <h2>五 · 发布检查清单（消费 Mod 视角）</h2>
+  <table>
+    <tr><th>项</th><th>要求</th></tr>
+    <tr><td>RUIF.dll</td><td>发布包 <b>Assemblies 内不得内嵌</b>（csproj <code>Private=false</code>，发版前检查一次）</td></tr>
+    <tr><td>依赖模式</td><td>二选一：硬依赖（写 <code>modDependencies</code>）或软依赖（<b>不写</b> <code>modDependencies</code>，只写 <code>loadAfter</code>）—— 不要混着来</td></tr>
+    <tr><td>版本断言</td><td>硬依赖：构造器调 <code>RUIF.Api.IsAvailable(minVersion)</code>；软依赖：反射探测 + 结果缓存到你自己的静态字段</td></tr>
+    <tr><td>降级实测</td><td><b>禁用 RUIF</b> 后你的 Mod 仍可加载、可操作（实机测；没测过就在文档标 NOT RUN，不许写"已降级"）</td></tr>
+    <tr><td>绘制态纪律</td><td>你的窗口代码不裸改 <code>GUI.color</code> / <code>Text.Font</code>；一切经 RUIF 组件或 <code>Draw.*Scope</code>（<code>Draw.Color/Font/Anchor</code> 等）</td></tr>
+    <tr><td>数据纪律</td><td>传给组件的是已准备好的纯数据；排序 / null-guard 在你的代码里做，不指望框架</td></tr>
+  </table>
+</section>
+
+<section id="audit">
+  <h2>六 · 引擎可行性审计（逐项，不粉饰）</h2>
+  <div class="callout">
+    <b>审计方法（可复核）：</b>结论依据三类证据——① 知识库核实的原版 API 面（§38 UI 类型族：Window / Widgets / Listing_Standard / TooltipHandler 等）；② PersonalChronicle 参考实现 <b>400+ 处实机调用</b>与多轮实机验收；③ 反编译工具（ilspycmd）对目标 Build 程序集的核实（如 1.6 DrawBoxSolid 会重置 GUI.color、CompPower 链式模型等均由此定案）。RUIF 编码期每个 API 落地前都会走同样的反编译核实，不以记忆为准。
+  </div>
+  <h3><span class="badge b-ok">✅ 100% 引擎原生</span>——零妥协，全部是引擎公开 API 的现成能力</h3>
+  <table>
+    <tr><th>能力</th><th>实现依据</th></tr>
+    <tr><td>文本绘制 / 测量 / 宽度截断</td><td><code>Verse.Text</code>（Font 三档 / CalcSize / Anchor）——原版界面同机制</td></tr>
+    <tr><td>按钮 / 复选 / 滑条 / 输入框 / 单选</td><td><code>Widgets.ButtonText / Checkbox / HorizontalSlider / TextField / Listing_Standard.RadioButton</code></td></tr>
+    <tr><td>面板 / 卡片 / 描边 / 分隔线 / 高亮 / 徽标</td><td><code>DrawBoxSolid / DrawBox / DrawLineHorizontal / DrawLineVertical / DrawHighlight*</code> 组合</td></tr>
+    <tr><td>进度条</td><td><code>Widgets.FillableBar</code> + 自绘双轨（参考实现两种都在用）</td></tr>
+    <tr><td>滚动 / 大列表虚拟化</td><td><code>BeginScrollView</code> + 可见行数学——原版列表同模式，非黑科技</td></tr>
+    <tr><td>Tooltip</td><td><code>TooltipHandler.TipRegion</code> + <code>TipSignal</code>（第二参=延迟秒）</td></tr>
+    <tr><td>贴图染色（自定义配色）</td><td><code>ContentFinder&lt;Texture2D&gt;</code> 懒加载 + <code>GUI.color</code> 乘法染色——引擎官方机制（框架不自带换肤层）</td></tr>
+    <tr><td>程序动画（渐变 / 滑入 / 呼吸态）</td><td>IMGUI 每帧重绘，<code>Time</code> 插值即动画——100% 代码可实现；流畅度受游戏帧率制约（战斗掉帧时 UI 动画同步掉帧，如实告知）</td></tr>
+    <tr><td>右键 / 悬停 / 键盘事件</td><td><code>Event.current</code>（button==1 右键已在参考实现 ClickableCard 实测）、<code>Mouse.IsOver</code>、窗口键盘事件</td></tr>
+  </table>
+  <h3><span class="badge b-part">⚠️ 可实现，但有代价</span>——如实标注代价，绝不按 ✅ 宣传</h3>
+  <table>
+    <tr><th>能力</th><th>实现方式</th><th>代价 / 边界</th></tr>
+    <tr><td>圆角 / 阴影 / 描边特效</td><td>预渲染 <b>NinePatch PNG 贴图</b>（引擎无矢量圆角）</td><td>随 Mod 发素材；RUIF 默认直角——直角即原生，圆角即素材，文档会标明每个组件用的是哪种</td></tr>
+    <tr><td>自定义字体</td><td><b>官方路径 = AssetBundle</b>（1.6 明确支持 Shader/Font/Mesh 走 bundle；松散 TTF 无官方加载路径）</td><td>需构建 bundle 管线，字体改动要重建 bundle；与原版 Text 管线的兼容性须先做原型验证——<b>原型通过前，RUIF 只承诺原版三档字体</b></td></tr>
+    <tr><td>曲线 / 图表</td><td>折线逼近（<code>DrawLine</code> 分段）</td><td>分段数有上限（GC / draw call）；不做平滑贝塞尔插值渲染</td></tr>
+    <tr><td>图标体系</td><td>消费 Mod 自备贴图，或复用原版 <code>Textures/UI</code> 资产</td><td>框架不内置图标库（避免替所有 Mod 定图标审美）</td></tr>
+    <tr><td>零分配纪律</td><td>布局缓存 + Dirty 标记 + 对象复用</td><td>违反纪律（每帧 new List / LINQ / 闭包）会 GC 卡顿——框架会提供安全路径，但拦不住你在绘制回调里乱分配</td></tr>
+  </table>
+  <h3><span class="badge b-no">❌ 引擎层面做不到</span>——RUIF 明确不承诺，文档与宣传永不越线</h3>
+  <table>
+    <tr><th>做不到的</th><th>原因</th></tr>
+    <tr><td>React 式保留模式 / 虚拟 DOM 自动 diff</td><td>引擎是<b>即时模式</b>（每帧重绘、无保留控件树）。RUIF 用「布局算一次 + Dirty 复用」逼近其收益，但<b>不是</b>自动 diff——这是设计定调，不是技术缺陷</td></tr>
+    <tr><td>实时高斯模糊 / 后处理合成</td><td>UI 层无 RenderTexture 后处理管线的合理成本路径；理论可行但每帧开销不可接受——不做</td></tr>
+    <tr><td>系统原生控件（系统文件对话框等）</td><td>只能用游戏自带 Dialog 体系</td></tr>
+    <tr><td>多线程 UI</td><td>IMGUI 主线程独占；后台线程只能准备数据，不能碰绘制</td></tr>
+    <tr><td>触摸 / 手势</td><td>桌面版只有鼠标 + 键盘</td></tr>
+    <tr><td>松散 TTF 字体加载</td><td>本项目实测不可靠（无 byte[] Font 构造、OS 字体切换脆弱）——官方路径只剩 AssetBundle（见 ⚠️ 行）</td></tr>
+  </table>
+</section>
+
+<section id="promise">
+  <h2>七 · 不失真承诺（写进框架文档的硬规矩）</h2>
+  <div class="callout">
+    <ol style="margin:4px 0 0 18px">
+      <li><b>三级标注制</b>：RUIF 每个组件的文档页固定显示实现等级徽标（✅ 原生 / ⚠️ 有代价+代价说明 / ❌ 不做）。<b>⚠️ 永不写成 ✅</b>。</li>
+      <li><b>示例即实测</b>：文档里的每个代码示例在发布前编译通过并实机运行过；做不到的写「UNKNOWN / NOT RUN」，绝不编造结果。</li>
+      <li><b>API 先核实再落地</b>：每个公开 API 以目标 Build 程序集反编译核实签名为准，不以记忆或旧文档为准（知识库铁律）。</li>
+      <li><b>不靠魔法</b>：框架 UI 全部走引擎公开 API（Widgets / GUI / ContentFinder / Event）；<b>不用 Harmony 补丁画 UI、不用反射戳私有字段</b>——冲突面最小化。</li>
+      <li><b>降级诚实</b>：未装 / 低版本 RUIF 时消费 Mod 走原生降级路径，且该路径必须是<b>实机测过</b>的。<b>当前状态：NOT RUN</b> —— "禁用 RUIF"实机测试待执行；未测前不对外宣称降级成立。</li>
+    </ol>
+  </div>
+  <div class="danger" style="border:1px solid var(--border);border-left:3px solid var(--dead);background:rgba(192,71,50,.08);padding:12px 16px;border-radius:6px">
+    <b>一句话总结：</b>RUIF 能在环世界引擎里 <b>100% 诚实落地</b>的是「原版 UI 能力面 + 其上的组合、布局、调试」——这部分没有任何失真；圆角/字体/图表这三类<b>有代价的替代实现</b>会逐项标注代价；引擎做不到的（自动 diff、模糊后处理、原生控件、多线程 UI、松散字体）框架<b>明确不承诺</b>，也永远不会偷偷用 ⚠️ 冒充 ✅。
+  </div>
+</section>
+
+</main>
+</body>
+</html>

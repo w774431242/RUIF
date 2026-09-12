@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RUIF 图表组件图鉴 · 极量扩展版 v0.2</title>
+<style>
+  :root{ --bg:#16181f; --panel:#1a1d24; --card:#22252e; --text:#d9dbe2; --muted:#8f97a3; --border:#2b3038; --accent:#4e9bf0; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.55;}
+  header{padding:22px 26px 16px;border-bottom:1px solid var(--border);background:var(--panel);}
+  header h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.5px;}
+  header .sub{color:var(--muted);font-size:13px;margin-top:6px;}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap;}
+  .toolbar .lbl{color:var(--muted);font-size:12px;}
+  .btn{cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);padding:5px 13px;border-radius:6px;font-size:13px;transition:.15s;}
+  .btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .chip{font-size:11.5px;padding:3px 10px;border-radius:12px;border:1px solid var(--border);color:var(--muted);background:var(--card);}
+  .chip b{color:var(--text);}
+  main{padding:22px 26px 60px;max-width:1360px;margin:0 auto;}
+  h2{font-size:15px;font-weight:600;margin:30px 0 12px;padding-left:10px;border-left:3px solid var(--accent);}
+  .note{color:var(--muted);font-size:12.5px;margin:-6px 0 14px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--panel);border:1px solid var(--border);}
+  th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);}
+  th{background:var(--card);color:var(--muted);font-weight:600;font-size:11.5px;}
+  tr:last-child td{border-bottom:none;}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+  .t-yes{background:rgba(78,179,66,.16);color:#5ec46a;}
+  .t-warn{background:rgba(224,160,60,.18);color:#e6b659;}
+  .t-no{background:rgba(216,80,70,.18);color:#e87266;}
+  .t-re{background:rgba(78,155,240,.16);color:#6aa9e8;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+  .chart-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;}
+  .chart-card .head{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;gap:6px;flex-wrap:wrap;}
+  .chart-card .title{font-size:13px;font-weight:600;}
+  .chart-card .head .right{display:flex;gap:6px;align-items:center;}
+  .cost{font-size:10.5px;padding:1px 7px;border-radius:9px;background:var(--card);color:var(--muted);border:1px solid var(--border);}
+  .chart-card .body{padding:8px 10px;background:var(--card);}
+  canvas{display:block;width:100%;height:150px;}
+  .chart-card .foot{padding:7px 12px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:24px;border-top:1px solid var(--border);margin-top:30px;}
+  code{background:var(--card);padding:1px 6px;border-radius:4px;font-size:12px;color:var(--accent);}
+  .tier-band{display:flex;gap:10px;align-items:baseline;margin:26px 0 10px;flex-wrap:wrap;}
+  .tier-band .tn{font-size:15px;font-weight:700;}
+  .tier-band .td{color:var(--muted);font-size:12px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>RUIF · 图表组件图鉴（极量扩展版）</h1>
+  <div class="sub">设计草案 v0.2 — 48 项图表按实现成本四档排序（T0 复用原子 → T3 复杂布局），已过滤官方引擎完全无法支撑的内容。候选进入 <code>v1.1 Charts</code> 子系统。</div>
+  <div class="chips" id="chips"></div>
+  <div class="toolbar">
+    <span class="lbl">筛选：</span>
+    <button class="btn active" data-f="all">全部</button>
+    <button class="btn" data-f="0">T0 复用原子</button>
+    <button class="btn" data-f="1">T1 简单几何</button>
+    <button class="btn" data-f="2">T2 算法件</button>
+    <button class="btn" data-f="3">T3 复杂布局</button>
+    <span class="lbl" style="margin-left:10px;">主题：</span>
+    <button class="btn active" id="th-dark">暗色</button>
+    <button class="btn" id="th-vanilla">Vanilla</button>
+  </div>
+</header>
+
+<main>
+  <h2>〇、过滤清单 — 官方引擎完全无法支撑 / 明确不引入</h2>
+  <div class="note">以下内容在 Verse GUI（即时模式、无 DOM、无 WebGL）下无落地路径或与 RUIF 范式冲突，已从目录中剔除，不再评估。</div>
+  <table>
+    <thead><tr><th>内容</th><th>评级</th><th>过滤原因</th></tr></thead>
+    <tbody>
+      <tr><td>地理 / 瓦片地图 / 投影图</td><td><span class="tag t-no">❌ 过滤</span></td><td>无地理数据源与投影支持，世界观内无坐标意义。</td></tr>
+      <tr><td>3D / 旋转 / 透视图表</td><td><span class="tag t-no">❌ 过滤</span></td><td>无 3D 渲染管线，GUI 仅 2D Rect。</td></tr>
+      <tr><td>WebGL / GPU 加速画布</td><td><span class="tag t-no">❌ 过滤</span></td><td>无 WebGL 上下文，仅 IMGUI。</td></tr>
+      <tr><td>实时高频流式刷新（&gt;百点/帧）</td><td><span class="tag t-no">❌ 过滤</span></td><td>UI 每帧重绘、无独立渲染线程；大数据必须走脏矩形快照，不承诺流式。</td></tr>
+      <tr><td>图表导出位图 / PNG</td><td><span class="tag t-no">❌ 过滤</span></td><td>纹理回读链路未验证，依赖 RenderTexture 不在 UI 层承诺范围。</td></tr>
+      <tr><td>SVG / DOM 输出</td><td><span class="tag t-no">❌ 过滤</span></td><td>无 DOM，SVG 无宿主。</td></tr>
+      <tr><td>移植 ECharts / D3 / Chart.js</td><td><span class="tag t-no">❌ 过滤</span></td><td>三者依赖 DOM/Canvas 2D API，引擎内不可用；只吸收其视觉范式。</td></tr>
+      <tr><td>字体级排版渲染（富文本排版引擎）</td><td><span class="tag t-no">❌ 过滤</span></td><td>只有 GameFont 三档字号，无字形级排版能力。</td></tr>
+    </tbody>
+  </table>
+
+  <h2>一、成本分档总览</h2>
+  <div class="note">成本为单人预估人日（含 Gallery 演示与单测）。T0 复用 v1.0 已有原子，接近零成本；T1–T2 依赖 <code>Charts</code> 坐标系子系统；T3 为复杂布局算法件。总表见文末。</div>
+
+  <div id="tiers"></div>
+
+  <h2>二、全量目录总表（按成本升序）</h2>
+  <div class="note">状态列标注是否已有可复用实现。全部通过主题令牌取色，禁 <code>new Color</code>。</div>
+  <table id="summary"></table>
+
+  <footer>
+    RUIF 图表图鉴 · 极量扩展版 v0.2 · 48 项 / 四档成本 / 过滤 8 项<br>
+    主题令牌：Dark（默认）/ Vanilla · 全部矢量直绘，零贴图、零 CDN
+  </footer>
+</main>
+
+<script>
+// ---- RUIF 主题令牌（L1 单一真源，与 Source/Theme/Theme.cs 一致）----
+const THEMES = {
+  dark: {
+    window:[0.086,0.094,0.114], panel:[0.114,0.125,0.149], raised:[0.141,0.157,0.188],
+    card:[0.133,0.149,0.180], hover:[0.173,0.192,0.231], border:[0.271,0.294,0.337],
+    borderSoft:[0.192,0.212,0.247], hair:[0.165,0.180,0.212], text:[0.851,0.867,0.890],
+    muted:[0.561,0.588,0.627], dim:[0.373,0.400,0.439], accent:[0.306,0.604,0.941],
+    info:[0.478,0.722,0.910], alive:[0.345,0.702,0.408], dead:[0.851,0.325,0.310], warn:[0.878,0.627,0.235]
+  },
+  vanilla: {
+    window:[0.788,0.769,0.690], panel:[0.835,0.820,0.745], raised:[0.875,0.859,0.784],
+    card:[0.886,0.871,0.796], hover:[0.918,0.902,0.827], border:[0.459,0.439,0.361],
+    borderSoft:[0.663,0.643,0.557], hair:[0.718,0.698,0.612], text:[0.169,0.161,0.129],
+    muted:[0.365,0.349,0.286], dim:[0.518,0.498,0.424], accent:[0.541,0.427,0.184],
+    info:[0.357,0.431,0.620], alive:[0.243,0.478,0.282], dead:[0.651,0.200,0.145], warn:[0.706,0.333,0.118]
+  }
+};
+let curTheme='dark', curFilter='all';
+const rgb=c=>`rgb(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)})`;
+const rgba=(c,a)=>`rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},${a})`;
+const series=(T,i)=>[T.accent,T.info,T.alive,T.warn,T.dead,T.muted][i%6];
+
+// 绘图区背景 + 横向网格
+function plotBG(ctx,T,W,H,l,r,t,b,max,rows){
+  const x0=l,y0=t,w=W-l-r,h=H-t-b;
+  ctx.fillStyle=rgb(T.card);ctx.fillRect(x0,y0,w,h);
+  ctx.strokeStyle=rgba(T.hair,.5);ctx.lineWidth=1;ctx.font='10px sans-serif';
+  for(let i=0;i<=rows;i++){const y=y0+h*i/rows;ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x0+w,y);ctx.stroke();
+    ctx.fillStyle=rgb(T.dim);ctx.textAlign='right';ctx.fillText(Math.round(max*(1-i/rows)),x0-4,y+3);}
+  return {x0,y0,w,h};
+}
+function cardBG(ctx,T,W,H){ctx.fillStyle=rgb(T.card);ctx.fillRect(0,0,W,H);}
+
+// ---------- T0 绘图 ----------
+function dSpark(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[10,14,12,18,16,22,19,27,24,31,28,35],pL=6,pR=6,pT=16,pB=12,cw=W-pL-pR,ch=H-pT-pB,max=Math.max(...d)*1.1,min=Math.min(...d)*0.9;
+  const px=i=>pL+cw*i/(d.length-1),py=v=>pT+ch-ch*(v-min)/(max-min);
+  ctx.beginPath();ctx.moveTo(px(0),py(d[0]));d.forEach((v,i)=>ctx.lineTo(px(i),py(v)));
+  ctx.strokeStyle=rgb(T.alive);ctx.lineWidth=2;ctx.stroke();
+  ctx.lineTo(px(d.length-1),H-pB);ctx.lineTo(px(0),H-pB);ctx.closePath();ctx.fillStyle=rgba(T.alive,.14);ctx.fill();
+  ctx.fillStyle=rgb(T.alive);ctx.beginPath();ctx.arc(px(d.length-1),py(d[d.length-1]),3,0,7);ctx.fill();
+  ctx.fillStyle=rgb(T.muted);ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText('+250%',pL+2,11);}
+
+function dKpi(ctx,T,W,H){cardBG(ctx,T,W,H);
+  ctx.fillStyle=rgb(T.muted);ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText('日均产出',10,18);
+  ctx.fillStyle=rgb(T.text);ctx.font='600 26px sans-serif';ctx.fillText('2,840',10,48);
+  ctx.fillStyle=rgb(T.alive);ctx.font='600 11px sans-serif';ctx.fillText('▲ +12.4% 环比',10,64);
+  const bars=[8,12,10,15,13,18,16],bw=(W-130)/7;
+  bars.forEach((v,i)=>{const x=132+i*bw,h2=v*3.6;
+    ctx.fillStyle=rgb(i===6?T.accent:T.borderSoft);ctx.fillRect(x,112-h2,bw-4,h2);});}
+
+function dCap(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const x=12,w=W-24,y=H*0.32,h=16;
+  ctx.fillStyle=rgb(T.borderSoft);ctx.fillRect(x,y,w,h);
+  ctx.fillStyle=rgb(T.alive);ctx.fillRect(x,y,w*0.62,h);
+  ctx.fillStyle=rgb(T.warn);ctx.fillRect(x+w*0.62,y,w*0.16,h);
+  ctx.setLineDash([3,3]);ctx.strokeStyle=rgb(T.dead);ctx.strokeRect(x+w*0.78,y,w*0.22,h);ctx.setLineDash([]);
+  ctx.fillStyle=rgb(T.text);ctx.font='600 11px sans-serif';ctx.textAlign='left';ctx.fillText('粮仓 78%',x,y-6);
+  ctx.fillStyle=rgb(T.muted);ctx.font='9px sans-serif';ctx.fillText('虚线=超载段',x,y+h+14);}
+
+function dWipe(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const x=12,w=W-24,y=H/2-9,h=18,p=0.68,sk=10;
+  ctx.fillStyle=rgb(T.borderSoft);ctx.fillRect(x,y,w,h);
+  ctx.beginPath();ctx.moveTo(x,y+h);ctx.lineTo(x+w*p,y+h);ctx.lineTo(x+w*p+sk,y);ctx.lineTo(x,y);ctx.closePath();
+  ctx.fillStyle=rgb(T.accent);ctx.fill();
+  ctx.fillStyle=rgb(T.text);ctx.font='600 11px sans-serif';ctx.textAlign='left';ctx.fillText('研究进度 68%',x,y-7);}
+
+function dGauge(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const v=0.72,cx=W/2,cy=H*0.66,r=Math.min(W,H)*0.34;
+  ctx.lineWidth=9;ctx.lineCap='round';
+  ctx.strokeStyle=rgb(T.borderSoft);ctx.beginPath();ctx.arc(cx,cy,r,Math.PI*0.75,Math.PI*2.25);ctx.stroke();
+  ctx.strokeStyle=rgb(T.alive);ctx.beginPath();ctx.arc(cx,cy,r,Math.PI*0.75,Math.PI*0.75+Math.PI*1.5*v);ctx.stroke();
+  ctx.fillStyle=rgb(T.text);ctx.font='600 20px sans-serif';ctx.textAlign='center';ctx.fillText(Math.round(v*100)+'%',cx,cy+2);
+  ctx.fillStyle=rgb(T.muted);ctx.font='10px sans-serif';ctx.fillText('产能利用',cx,cy+18);}
+
+function dMultiGauge(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const vals=[['电',0.8,T.info],['食',0.55,T.alive],['娱',0.3,T.warn]];
+  vals.forEach((v,i)=>{const cx=W*(0.2+0.3*i),cy=H*0.72,r=Math.min(W,H)*0.22;
+    ctx.lineWidth=7;ctx.lineCap='round';
+    ctx.strokeStyle=rgb(T.borderSoft);ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,2*Math.PI);ctx.stroke();
+    ctx.strokeStyle=rgb(v[2]);ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,Math.PI+Math.PI*v[1]);ctx.stroke();
+    ctx.fillStyle=rgb(T.text);ctx.font='600 11px sans-serif';ctx.textAlign='center';ctx.fillText(v[0],cx,cy-6);
+    ctx.fillStyle=rgb(T.muted);ctx.font='9px sans-serif';ctx.fillText(Math.round(v[1]*100)+'%',cx,cy+8);});}
+
+function dThermo(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const x=W*0.28,top=12,bot=H-26,tw=14;
+  ctx.strokeStyle=rgb(T.borderSoft);ctx.lineWidth=1;ctx.strokeRect(x,top,tw,bot-top);
+  const v=0.68,fh=(bot-top)*v;
+  ctx.fillStyle=rgb(T.dead);ctx.fillRect(x+2,bot-fh,tw-4,fh);
+  ctx.beginPath();ctx.arc(x+tw/2,bot-3,tw*0.85,0,7);ctx.fill();
+  for(let i=0;i<=4;i++){const y=top+(bot-top)*i/4;
+    ctx.strokeStyle=rgb(T.hair);ctx.beginPath();ctx.moveTo(x+tw+3,y);ctx.lineTo(x+tw+10,y);ctx.stroke();
+    ctx.fillStyle=rgb(T.dim);ctx.font='9px sans-serif';ctx.textAlign='left';ctx.fillText(Math.round(100*(1-i/4))+'°',x+tw+13,y+3);}}
+
+function dWaffle(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const cols=11,rows=6,tot=cols*rows,filled=Math.round(tot*0.62);
+  const cw=(W-16)/cols,ch=(H-16)/rows,s=Math.min(cw,ch)-3;let k=0;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const x=8+c*cw+(cw-s)/2,y=8+r*ch+(ch-s)/2;
+    ctx.fillStyle=k<filled?rgb(T.alive):rgb(T.borderSoft);ctx.fillRect(x,y,s,s);k++;}}
+
+function dBullet(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const rows=[['产能',0.72,0.6],['库存',0.45,0.8],['幸福',0.83,0.7]];
+  const x0=38,y0=10,w=W-x0-12,rh=(H-20)/3;
+  rows.forEach((r,i)=>{const y=y0+i*rh+rh*0.28,bh=rh*0.44;
+    ctx.fillStyle=rgb(T.muted);ctx.textAlign='right';ctx.font='10px sans-serif';ctx.fillText(r[0],x0-5,y+bh/2+3);
+    ctx.fillStyle=rgba(T.borderSoft,.6);ctx.fillRect(x0,y,w,bh);
+    ctx.fillStyle=rgba(series(T,i),.75);ctx.fillRect(x0,y,w*r[1],bh);
+    ctx.fillStyle=rgb(T.text);ctx.fillRect(x0+w*r[2]-1.5,y-3,3,bh+6);});}
+
+function dLolli(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[30,45,28,52,38],lab=['A','B','C','D','E'];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,22,8,12,18,60,3);
+  const gap=w/d.length;
+  d.forEach((v,i)=>{const x=x0+gap*i+gap/2,y=y0+h-h*v/60;
+    ctx.strokeStyle=rgb(T.borderSoft);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y0+h);ctx.lineTo(x,y);ctx.stroke();
+    ctx.fillStyle=rgb(series(T,i));ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.fill();
+    ctx.fillStyle=rgb(T.dim);ctx.textAlign='center';ctx.fillText(lab[i],x,H-6);});}
+
+function dTimeline(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const ev=[['抵达',T.alive],['温室',T.info],['raid',T.dead],['研究室',T.warn],['车队',T.accent]];
+  const pL=12,pR=12,y=H/2,gap=(W-pL-pR)/(ev.length-1);
+  ctx.strokeStyle=rgb(T.borderSoft);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(W-pR,y);ctx.stroke();
+  ev.forEach((e,i)=>{const x=pL+gap*i;
+    ctx.fillStyle=rgb(e[1]);ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.fill();
+    ctx.strokeStyle=rgb(T.card);ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=rgb(T.text);ctx.font='10px sans-serif';ctx.textAlign='center';
+    const up=i%2===0;ctx.fillText(e[0],x,up?y-12:y+18);
+    ctx.strokeStyle=rgb(T.hair);ctx.beginPath();ctx.moveTo(x,y+(up?-5:5));ctx.lineTo(x,up?y-9:y+13);ctx.stroke();});}
+
+function dEvents(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const ev=[[0.05,1],[0.12,2],[0.2,1],[0.33,3],[0.42,1],[0.5,2],[0.58,1],[0.7,4],[0.8,1],[0.9,2]];
+  const y=H/2;
+  ctx.strokeStyle=rgb(T.borderSoft);ctx.beginPath();ctx.moveTo(12,y);ctx.lineTo(W-12,y);ctx.stroke();
+  ev.forEach(e=>{const x=12+(W-24)*e[0],r=3+e[1]*1.6;
+    ctx.fillStyle=rgb(e[1]>2?T.dead:T.accent);ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
+    ctx.strokeStyle=rgb(T.card);ctx.lineWidth=1.5;ctx.stroke();});
+  ctx.fillStyle=rgb(T.muted);ctx.font='9px sans-serif';ctx.textAlign='left';ctx.fillText('事件权重 · 大点=高重要度',10,12);}
+
+// ---------- T1 绘图 ----------
+function dBar(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[12,28,19,34,22,41,30],lab=['一','二','三','四','五','六','日'];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,26,8,10,20,45,3);
+  const gap=w/d.length,bw=gap*0.6;
+  d.forEach((v,i)=>{const x=x0+gap*i+(gap-bw)/2;
+    ctx.fillStyle=rgb(T.accent);ctx.fillRect(x,y0+h-h*v/45,bw,h*v/45);
+    ctx.fillStyle=rgb(T.muted);ctx.textAlign='center';ctx.font='9px sans-serif';ctx.fillText(lab[i],x+bw/2,H-7);});}
+
+function dBarH(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[34,26,18,12],lab=['矿','食','木','科'];
+  const x0=28,y0=10,w=W-x0-30,h=H-20;
+  d.forEach((v,i)=>{const y=y0+i*(h/d.length)+4,bh=h/d.length-9,bw=w*v/40;
+    ctx.fillStyle=rgb(T.muted);ctx.textAlign='right';ctx.font='11px sans-serif';ctx.fillText(lab[i],x0-5,y+bh/2+4);
+    ctx.fillStyle=rgb(series(T,i));ctx.fillRect(x0,y,bw,bh);
+    ctx.fillStyle=rgb(T.dim);ctx.textAlign='left';ctx.font='9px sans-serif';ctx.fillText(v,x0+bw+4,y+bh/2+4);});}
+
+function dPie(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[34,26,18,12,10],lab=['矿','食','木','科','医'];
+  const cx=W*0.34,cy=H/2,r=Math.min(W,H)*0.37,tot=d.reduce((a,b)=>a+b,0);let a=-Math.PI/2;
+  d.forEach((v,i)=>{const a2=a+v/tot*2*Math.PI;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,a,a2);ctx.closePath();ctx.fillStyle=rgb(series(T,i));ctx.fill();a=a2;});
+  let ly=H/2-(lab.length*15)/2;
+  lab.forEach((l,i)=>{const x=W*0.6;ctx.fillStyle=rgb(series(T,i));ctx.fillRect(x,ly+3,9,9);
+    ctx.fillStyle=rgb(T.text);ctx.textAlign='left';ctx.font='11px sans-serif';ctx.fillText(l,x+14,ly+11);ly+=15;});}
+
+function dDonut(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[34,26,18,12,10],lab=['矿','食','木','科','医'];
+  const cx=W*0.36,cy=H/2,r=Math.min(W,H)*0.36,rin=r*0.56,tot=d.reduce((a,b)=>a+b,0);let a=-Math.PI/2;
+  d.forEach((v,i)=>{const a2=a+v/tot*2*Math.PI;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,a,a2);ctx.closePath();ctx.fillStyle=rgb(series(T,i));ctx.fill();a=a2;});
+  ctx.beginPath();ctx.arc(cx,cy,rin,0,7);ctx.fillStyle=rgb(T.card);ctx.fill();
+  ctx.fillStyle=rgb(T.text);ctx.font='600 13px sans-serif';ctx.textAlign='center';ctx.fillText('100%',cx,cy-2);
+  ctx.fillStyle=rgb(T.muted);ctx.font='10px sans-serif';ctx.fillText('产出构成',cx,cy+13);
+  let ly=H/2-(lab.length*15)/2;
+  lab.forEach((l,i)=>{const x=W*0.6;ctx.fillStyle=rgb(series(T,i));ctx.fillRect(x,ly+3,9,9);
+    ctx.fillStyle=rgb(T.text);ctx.textAlign='left';ctx.font='11px sans-serif';ctx.fillText(l,x+14,ly+11);ly+=15;});}
+
+function dLine(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const a=[8,14,11,20,16,26,22,30],b=[4,9,7,12,10,17,15,21];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,26,8,10,14,33,3);
+  const px=i=>x0+w*i/(a.length-1),py=v=>y0+h-h*v/33;
+  ctx.beginPath();ctx.moveTo(px(0),py(a[0]));a.forEach((v,i)=>ctx.lineTo(px(i),py(v)));
+  ctx.lineTo(px(a.length-1),y0+h);ctx.lineTo(px(0),y0+h);ctx.closePath();ctx.fillStyle=rgba(T.accent,.18);ctx.fill();
+  [[a,T.accent],[b,T.info]].forEach(([arr,col])=>{
+    ctx.beginPath();arr.forEach((v,i)=>i?ctx.lineTo(px(i),py(v)):ctx.moveTo(px(i),py(v)));
+    ctx.strokeStyle=rgb(col);ctx.lineWidth=2;ctx.stroke();
+    arr.forEach((v,i)=>{ctx.fillStyle=rgb(col);ctx.beginPath();ctx.arc(px(i),py(v),2.2,0,7);ctx.fill();});});}
+
+function dStep(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[10,14,14,20,18,26,26,30];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,26,8,10,14,35,3);
+  const px=i=>x0+w*i/(d.length-1),py=v=>y0+h-h*v/35;
+  ctx.beginPath();ctx.moveTo(px(0),py(d[0]));
+  for(let i=1;i<d.length;i++){ctx.lineTo(px(i),py(d[i-1]));ctx.lineTo(px(i),py(d[i]));}
+  ctx.strokeStyle=rgb(T.info);ctx.lineWidth=2;ctx.stroke();}
+
+function dArea(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[15,22,18,28,24,34,30,40];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,26,8,10,14,44,3);
+  const px=i=>x0+w*i/(d.length-1),py=v=>y0+h-h*v/44;
+  ctx.beginPath();ctx.moveTo(px(0),py(d[0]));d.forEach((v,i)=>ctx.lineTo(px(i),py(v)));
+  ctx.lineTo(px(d.length-1),y0+h);ctx.lineTo(px(0),y0+h);ctx.closePath();
+  ctx.fillStyle=rgba(T.warn,.28);ctx.fill();
+  ctx.beginPath();d.forEach((v,i)=>i?ctx.lineTo(px(i),py(v)):ctx.moveTo(px(i),py(v)));
+  ctx.strokeStyle=rgb(T.warn);ctx.lineWidth=2;ctx.stroke();}
+
+function dGrouped(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const s1=[12,20,15,26],s2=[8,16,11,19],lab=['春','夏','秋','冬'];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,24,8,10,20,30,3);
+  const gap=w/s1.length,bw=gap*0.32;
+  s1.forEach((v,i)=>{const x=x0+gap*i+(gap-bw*2)/2;
+    ctx.fillStyle=rgb(T.accent);ctx.fillRect(x,y0+h-h*v/30,bw,h*v/30);
+    ctx.fillStyle=rgb(T.info);ctx.fillRect(x+bw,y0+h-h*s2[i]/30,bw,h*s2[i]/30);
+    ctx.fillStyle=rgb(T.muted);ctx.textAlign='center';ctx.font='9px sans-serif';ctx.fillText(lab[i],x+bw,H-7);});}
+
+function dStacked(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const s1=[8,12,9,15,11,18,14],s2=[4,6,5,8,7,9,7],lab=['一','二','三','四','五','六','日'];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,26,8,10,20,28,3);
+  const gap=w/s1.length,bw=gap*0.6;
+  s1.forEach((v,i)=>{const x=x0+gap*i+(gap-bw)/2,h1=h*v/28,h2=h*s2[i]/28;
+    ctx.fillStyle=rgb(T.accent);ctx.fillRect(x,y0+h-h1,bw,h1);
+    ctx.fillStyle=rgb(T.info);ctx.fillRect(x,y0+h-h1-h2,bw,h2);
+    ctx.fillStyle=rgb(T.muted);ctx.textAlign='center';ctx.font='9px sans-serif';ctx.fillText(lab[i],x+bw/2,H-7);});}
+
+function dHist(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const bins=[2,5,9,14,11,6,3];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,24,8,10,16,15,3);
+  const gap=w/bins.length,bw=gap*0.82;
+  bins.forEach((v,i)=>{ctx.fillStyle=rgb(T.info);
+    ctx.fillRect(x0+gap*i+(gap-bw)/2,y0+h-h*v/15,bw,h*v/15);});}
+
+function dScatter(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const pts=[[12,30],[22,55],[35,40],[48,70],[60,35],[70,80],[82,50],[90,65],[30,20],[55,90]];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,24,8,10,14,100,4);
+  pts.forEach((p,i)=>{const x=x0+w*p[0]/100,y=y0+h-h*p[1]/100;
+    ctx.fillStyle=rgba(series(T,i),.85);ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.fill();
+    ctx.strokeStyle=rgb(T.card);ctx.lineWidth=1.5;ctx.stroke();});}
+
+function dStackArea(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const s1=[10,14,12,18,16,22],s2=[6,8,7,11,9,13];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,24,8,10,14,40,3);
+  const n=s1.length,px=i=>x0+w*i/(n-1),py=v=>y0+h-h*v/40;
+  const tot=s1.map((v,i)=>v+s2[i]);
+  ctx.beginPath();ctx.moveTo(px(0),py(tot[0]));
+  tot.forEach((v,i)=>ctx.lineTo(px(i),py(v)));
+  for(let i=n-1;i>=0;i--)ctx.lineTo(px(i),py(s1[i]));
+  ctx.closePath();ctx.fillStyle=rgba(T.info,.4);ctx.fill();
+  ctx.beginPath();ctx.moveTo(px(0),py(s1[0]));s1.forEach((v,i)=>ctx.lineTo(px(i),py(v)));
+  for(let i=n-1;i>=0;i--)ctx.lineTo(px(i),y0+h);
+  ctx.closePath();ctx.fillStyle=rgba(T.accent,.4);ctx.fill();
+  [[tot,T.info],[s1,T.accent]].forEach(([arr,col])=>{
+    ctx.beginPath();arr.forEach((v,i)=>i?ctx.lineTo(px(i),py(v)):ctx.moveTo(px(i),py(v)));
+    ctx.strokeStyle=rgb(col);ctx.lineWidth=2;ctx.stroke();});}
+
+function dNested(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const cx=W*0.34,cy=H/2,R=Math.min(W,H)*0.38;
+  const outer=[40,30,30],inner=[50,50];
+  let a=-Math.PI/2;
+  outer.forEach((v,i)=>{const a2=a+v/100*2*Math.PI;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,a,a2);ctx.closePath();ctx.fillStyle=rgb(series(T,i));ctx.fill();a=a2;});
+  ctx.beginPath();ctx.arc(cx,cy,R*0.72,0,7);ctx.fillStyle=rgb(T.card);ctx.fill();
+  a=-Math.PI/2;
+  inner.forEach((v,i)=>{const a2=a+v/100*2*Math.PI;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R*0.7,a,a2);ctx.closePath();ctx.fillStyle=rgba(series(T,i+1),.8);ctx.fill();a=a2;});
+  ctx.beginPath();ctx.arc(cx,cy,R*0.44,0,7);ctx.fillStyle=rgb(T.card);ctx.fill();
+  ctx.fillStyle=rgb(T.text);ctx.font='600 11px sans-serif';ctx.textAlign='left';
+  ctx.fillText('外:产出',cx+W*0.26,cy-8);ctx.fillText('内:消耗',cx+W*0.26,cy+10);}
+
+function dQuad(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const pts=[[20,25],[35,60],[45,40],[60,75],[70,30],[80,55],[85,80],[50,20]];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,24,8,10,14,100,0);
+  ctx.strokeStyle=rgba(T.hair,.9);
+  ctx.beginPath();ctx.moveTo(x0,y0+h/2);ctx.lineTo(x0+w,y0+h/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x0+w/2,y0);ctx.lineTo(x0+w/2,y0+h);ctx.stroke();
+  ctx.fillStyle=rgb(T.alive);ctx.font='9px sans-serif';ctx.textAlign='right';ctx.fillText('高效',x0+w-4,y0+11);
+  ctx.fillStyle=rgb(T.dead);ctx.textAlign='left';ctx.fillText('低效',x0+4,y0+11);
+  pts.forEach((p,i)=>{const x=x0+w*p[0]/100,y=y0+h-h*p[1]/100;
+    ctx.fillStyle=p[0]>50&&p[1]>50?rgb(T.alive):rgb(T.dead);
+    ctx.beginPath();ctx.arc(x,y,4.5,0,7);ctx.fill();});}
+
+function dBubble(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const pts=[[20,30,8],[40,60,14],[60,40,10],[75,75,20],[85,30,6],[30,80,12]];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,24,8,10,14,100,4);
+  pts.forEach((p,i)=>{const x=x0+w*p[0]/100,y=y0+h-h*p[1]/100;
+    ctx.fillStyle=rgba(series(T,i),.45);ctx.beginPath();ctx.arc(x,y,p[2],0,7);ctx.fill();
+    ctx.strokeStyle=rgb(series(T,i));ctx.lineWidth=1.5;ctx.stroke();});}
+
+function dFunnel(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const st=[100,72,48,30],lab=['接触','谈判','意向','成交'];
+  const cx=W/2,top=12,bh=(H-28)/4;
+  st.forEach((v,i)=>{const w1=W*0.86*v/100,w2=W*0.86*(st[i+1]||v*0.72)/100,y=top+i*bh;
+    ctx.fillStyle=rgba(series(T,i),.82);
+    ctx.beginPath();ctx.moveTo(cx-w1/2,y);ctx.lineTo(cx+w1/2,y);ctx.lineTo(cx+w2/2,y+bh-4);ctx.lineTo(cx-w2/2,y+bh-4);ctx.closePath();ctx.fill();
+    ctx.fillStyle=rgb(T.card);ctx.font='600 10px sans-serif';ctx.textAlign='center';ctx.fillText(lab[i]+' '+v,cx,y+bh/2+2);});}
+
+function dSlope(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const a=[40,70,25,55],b=[65,50,55,80],lab=['矿','食','木','科'];
+  const x1=W*0.24,x2=W*0.76,y0=18,h=H-34;
+  a.forEach((v,i)=>{const y1=y0+h-h*v/100,y2=y0+h-h*b[i]/100;
+    ctx.strokeStyle=rgb(b[i]>a[i]?T.alive:T.dead);ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    ctx.fillStyle=rgb(T.text);ctx.font='10px sans-serif';ctx.textAlign='right';ctx.fillText(v,x1-5,y1+3);
+    ctx.textAlign='left';ctx.fillText(b[i],x2+5,y2+3);});
+  ctx.fillStyle=rgb(T.muted);ctx.textAlign='center';ctx.font='10px sans-serif';
+  ctx.fillText('前',x1,12);ctx.fillText('后',x2,12);}
+
+function dCal(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const cols=14,rows=7,gut=16;
+  const cw=(W-gut-8)/cols,ch=(H-14)/rows;
+  ctx.fillStyle=rgb(T.muted);ctx.font='8px sans-serif';
+  ['一','三','五'].forEach((d,i)=>ctx.fillText(d,2,14+i*2*ch+ch));
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const v=(Math.sin(r*2.3+c*0.7)+1)/2;
+    ctx.fillStyle=v>0.75?rgb(T.alive):v>0.4?rgba(T.alive,.55):rgb(T.borderSoft);
+    ctx.fillRect(gut+c*cw+1,7+r*ch+1,cw-2,ch-2);}}
+
+function dGantt(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const rows=[['清扫',0.05,0.18],['温室',0.12,0.35],['防御墙',0.25,0.55],['研究室',0.4,0.8],['飞船',0.6,0.95]];
+  const x0=46,y0=8,w=W-x0-12,rh=(H-16)/rows.length;
+  rows.forEach((r,i)=>{const y=y0+i*rh+rh*0.28,bh=rh*0.44;
+    ctx.fillStyle=rgb(T.muted);ctx.textAlign='right';ctx.font='10px sans-serif';ctx.fillText(r[0],x0-5,y+bh/2+3);
+    ctx.fillStyle=rgb(T.borderSoft);ctx.fillRect(x0,y,w,bh);
+    ctx.fillStyle=rgb(series(T,i));ctx.fillRect(x0+w*r[1],y,w*(r[2]-r[1]),bh);});}
+
+// ---------- T2 绘图 ----------
+function dHeat(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const rows=5,cols=10,p=6;
+  const cw=(W-p*2)/cols,ch=(H-p*2)/rows;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const v=(Math.sin(r*1.7+c*0.9)+1)/2;
+    ctx.fillStyle=rgba(T.accent,v*0.85+0.1);ctx.fillRect(p+c*cw+1,p+r*ch+1,cw-2,ch-2);}}
+
+function dWaterfall(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const st=[['初',120],['+收获',45],['-消耗',-30],['+贸易',25],['-袭击',-18],['末',142]];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,26,8,10,18,160,3);
+  const gap=w/st.length,bw=gap*0.55;let cum=0;
+  st.forEach((s,i)=>{const x=x0+gap*i+(gap-bw)/2;
+    if(i===0||i===st.length-1){const bh=h*s[1]/160;
+      ctx.fillStyle=rgb(T.accent);ctx.fillRect(x,y0+h-bh,bw,bh);cum=s[1];}
+    else{const v=Math.abs(s[1]);
+      if(s[1]>0){ctx.fillStyle=rgb(T.alive);ctx.fillRect(x,y0+h-h*(cum+v)/160,bw,h*v/160);cum+=v;}
+      else{ctx.fillStyle=rgb(T.dead);ctx.fillRect(x,y0+h-h*cum/160,bw,h*v/160);cum-=v;}}
+    ctx.fillStyle=rgb(T.dim);ctx.textAlign='center';ctx.font='9px sans-serif';ctx.fillText(s[0],x+bw/2,H-6);});}
+
+function dRadar(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const axes=['近战','射击','社交','智力','工艺','医疗'],vals=[0.8,0.6,0.9,0.5,0.7,0.4];
+  const cx=W/2,cy=H/2+4,R=Math.min(W,H)*0.32,n=axes.length;
+  ctx.strokeStyle=rgba(T.hair,.7);ctx.lineWidth=1;ctx.font='9px sans-serif';
+  for(let ring=1;ring<=3;ring++){ctx.beginPath();
+    for(let i=0;i<=n;i++){const a=-Math.PI/2+i*2*Math.PI/n,r=R*ring/3;
+      const x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}
+  for(let i=0;i<n;i++){const a=-Math.PI/2+i*2*Math.PI/n;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);ctx.stroke();
+    ctx.fillStyle=rgb(T.muted);ctx.textAlign='center';ctx.fillText(axes[i],cx+Math.cos(a)*(R+11),cy+Math.sin(a)*(R+11)+3);}
+  ctx.beginPath();vals.forEach((v,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;
+    const x=cx+Math.cos(a)*R*v,y=cy+Math.sin(a)*R*v;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.closePath();
+  ctx.fillStyle=rgba(T.accent,.22);ctx.fill();ctx.strokeStyle=rgb(T.accent);ctx.lineWidth=2;ctx.stroke();}
+
+function dRose(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const vals=[0.5,0.8,0.35,0.65,0.9,0.45,0.7,0.55],n=vals.length;
+  const cx=W/2,cy=H/2+2,R=Math.min(W,H)*0.36;
+  vals.forEach((v,i)=>{const a1=-Math.PI/2+i*2*Math.PI/n,a2=a1+2*Math.PI/n-0.08;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R*v,a1,a2);ctx.closePath();
+    ctx.fillStyle=rgba(series(T,i),.85);ctx.fill();ctx.strokeStyle=rgb(T.card);ctx.lineWidth=1;ctx.stroke();});}
+
+function dBox(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const g=[['近战',20,35,50,60,75],['射击',30,42,55,68,80],['社交',15,28,40,52,66]];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,24,8,10,16,100,4);
+  const gap=w/g.length;
+  g.forEach((gr,i)=>{const cx=x0+gap*i+gap/2,y=v=>y0+h-h*v/100,hw=gap*0.16;
+    ctx.strokeStyle=rgb(T.muted);ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(cx,y(gr[1]));ctx.lineTo(cx,y(gr[4]));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx-8,y(gr[1]));ctx.lineTo(cx+8,y(gr[1]));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx-8,y(gr[4]));ctx.lineTo(cx+8,y(gr[4]));ctx.stroke();
+    ctx.fillStyle=rgba(T.accent,.45);ctx.fillRect(cx-hw,y(gr[3]),hw*2,y(gr[1])-y(gr[3]));
+    ctx.strokeStyle=rgb(T.accent);ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(cx-hw,y(gr[2]));ctx.lineTo(cx+hw,y(gr[2]));ctx.stroke();
+    ctx.fillStyle=rgb(T.dim);ctx.textAlign='center';ctx.font='9px sans-serif';ctx.fillText(gr[0],cx,H-5);});}
+
+function dDual(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const bars=[40,55,48,70,62],line=[12,18,15,24,21];
+  const x0=26,xr=W-30,y0=12,h=H-26,w=xr-x0;
+  ctx.fillStyle=rgb(T.card);ctx.fillRect(x0,y0,w,h);
+  ctx.strokeStyle=rgba(T.hair,.5);ctx.font='9px sans-serif';
+  for(let i=0;i<=4;i++){const y=y0+h*i/4;ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(xr,y);ctx.stroke();
+    ctx.fillStyle=rgb(T.dim);ctx.textAlign='right';ctx.fillText(Math.round(100*(1-i/4)),x0-4,y+3);
+    ctx.textAlign='left';ctx.fillStyle=rgb(T.warn);ctx.fillText(Math.round(50*(1-i/4)),xr+4,y+3);}
+  const gap=w/bars.length,bw=gap*0.4;
+  bars.forEach((v,i)=>{ctx.fillStyle=rgba(T.accent,.75);
+    ctx.fillRect(x0+gap*i+(gap-bw)/2,y0+h-h*v/100,bw,h*v/100);});
+  const px=i=>x0+gap*i+gap/2,py=v=>y0+h-h*v/50;
+  ctx.beginPath();line.forEach((v,i)=>i?ctx.lineTo(px(i),py(v)):ctx.moveTo(px(i),py(v)));
+  ctx.strokeStyle=rgb(T.warn);ctx.lineWidth=2;ctx.stroke();
+  line.forEach((v,i)=>{ctx.fillStyle=rgb(T.warn);ctx.beginPath();ctx.arc(px(i),py(v),2.5,0,7);ctx.fill();});}
+
+function dCandle(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const oh=[[42,50,40,48],[48,55,46,52],[52,53,44,46],[46,49,42,44],[44,50,43,49],[49,58,48,56],[56,60,52,54],[54,56,50,51],[51,55,49,54],[54,62,53,60]];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,26,8,10,14,70,3);
+  const gap=w/oh.length,bw=gap*0.5;
+  oh.forEach((c,i)=>{const x=x0+gap*i+gap/2,y=v=>y0+h-h*(v-35)/(70-35);
+    const up=c[3]>=c[0];
+    ctx.strokeStyle=up?rgb(T.alive):rgb(T.dead);ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(x,y(c[2]));ctx.lineTo(x,y(c[1]));ctx.stroke();
+    ctx.fillStyle=up?rgb(T.alive):rgb(T.dead);
+    const t=y(Math.max(c[0],c[3])),b=y(Math.min(c[0],c[3]));
+    ctx.fillRect(x-bw/2,t,bw,Math.max(1,b-t));});
+  ctx.fillStyle=rgb(T.muted);ctx.font='9px sans-serif';ctx.textAlign='left';ctx.fillText('OHLC · 无均线',x0+2,y0+11);}
+
+function dPar(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const axes=['近战','射击','社交','智力','医疗'];
+  const lines=[[0.8,0.6,0.9,0.5,0.4],[0.4,0.7,0.3,0.8,0.7],[0.6,0.3,0.6,0.6,0.5],[0.9,0.85,0.4,0.3,0.6]];
+  const x0=30,w=W-60,y0=18,h=H-34;
+  axes.forEach((a,i)=>{const x=x0+w*i/4;
+    ctx.strokeStyle=rgb(T.hair);ctx.beginPath();ctx.moveTo(x,y0);ctx.lineTo(x,y0+h);ctx.stroke();
+    ctx.fillStyle=rgb(T.muted);ctx.font='9px sans-serif';ctx.textAlign='center';ctx.fillText(a,x,y0-6);});
+  lines.forEach((ln,li)=>{ctx.strokeStyle=rgba(series(T,li%3),.85);ctx.lineWidth=1.8;ctx.beginPath();
+    ln.forEach((v,i)=>{const x=x0+w*i/4,y=y0+h-h*v;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();});}
+
+function dStream(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const s1=[20,26,22,30,28,34],s2=[12,16,14,20,18,22],s3=[8,10,9,13,12,15];
+  const x0=6,w=W-12,y0=12,h=H-24,n=s1.length,max=80,mid=y0+h/2;
+  const px=i=>x0+w*i/(n-1);
+  const cum=(k,i)=>{let s=0;for(let j=0;j<k;j++)s+=[s1,s2,s3][j][i];return s;};
+  const start=i=>mid-h*(s1[i]+s2[i]+s3[i])/max/2;
+  for(let k=2;k>=0;k--){ctx.beginPath();
+    for(let i=0;i<n;i++){const y=start(i)+h*(cum(k+1,i))/max;i?ctx.lineTo(px(i),y):ctx.moveTo(px(i),y);}
+    for(let i=n-1;i>=0;i--)ctx.lineTo(px(i),start(i)+h*cum(k,i)/max);
+    ctx.closePath();ctx.fillStyle=rgba(series(T,k),.75);ctx.fill();}}
+
+function dCross(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[10,14,11,20,16,26,22,30];
+  const {x0,y0,w,h}=plotBG(ctx,T,W,H,26,8,10,14,35,3);
+  const px=i=>x0+w*i/(d.length-1),py=v=>y0+h-h*v/35;
+  ctx.beginPath();d.forEach((v,i)=>i?ctx.lineTo(px(i),py(v)):ctx.moveTo(px(i),py(v)));
+  ctx.strokeStyle=rgb(T.accent);ctx.lineWidth=2;ctx.stroke();
+  const hi=5,hx=px(hi),hy=py(d[hi]);
+  ctx.strokeStyle=rgba(T.text,.6);ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(hx,y0);ctx.lineTo(hx,y0+h);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x0,hy);ctx.lineTo(x0+w,hy);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=rgb(T.accent);ctx.beginPath();ctx.arc(hx,hy,4,0,7);ctx.fill();
+  const tw=52,tx=Math.min(hx+8,x0+w-tw),ty=y0+4;
+  ctx.fillStyle=rgb(T.panel);ctx.fillRect(tx,ty,tw,26);ctx.strokeStyle=rgb(T.border);ctx.strokeRect(tx,ty,tw,26);
+  ctx.fillStyle=rgb(T.text);ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText('第6期',tx+7,ty+11);
+  ctx.fillStyle=rgb(T.accent);ctx.fillText('26',tx+7,ty+21);}
+
+function dZoom(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const d=[10,14,11,20,16,26,22,30,24,32];
+  const ow=W*0.56;
+  const p1={x0:8,y0:14,w:ow-16,h:H-28};
+  ctx.fillStyle=rgb(T.card);ctx.fillRect(p1.x0,p1.y0,p1.w,p1.h);
+  const px=i=>p1.x0+p1.w*i/(d.length-1),pyF=v=>p1.y0+p1.h-p1.h*(v-5)/(35-5);
+  ctx.strokeStyle=rgba(T.muted,.7);ctx.lineWidth=1.2;ctx.beginPath();
+  d.forEach((v,i)=>i?ctx.lineTo(px(i),pyF(v)):ctx.moveTo(px(i),pyF(v)));ctx.stroke();
+  ctx.fillStyle=rgba(T.accent,.15);ctx.fillRect(px(4),p1.y0,px(7)-px(4),p1.h);
+  ctx.strokeStyle=rgb(T.accent);ctx.strokeRect(px(4),p1.y0,px(7)-px(4),p1.h);
+  const zx=ow+8,zw=W-zx-8;
+  ctx.fillStyle=rgb(T.card);ctx.fillRect(zx,14,zw,H-28);
+  const seg=d.slice(4,8);
+  const px2=i=>zx+8+(zw-16)*i/(seg.length-1),py2=v=>22+(H-46)*(1-(v-14)/(34-14));
+  ctx.strokeStyle=rgb(T.accent);ctx.lineWidth=2;ctx.beginPath();
+  seg.forEach((v,i)=>i?ctx.lineTo(px2(i),py2(v)):ctx.moveTo(px2(i),py2(v)));ctx.stroke();
+  seg.forEach((v,i)=>{ctx.fillStyle=rgb(T.accent);ctx.beginPath();ctx.arc(px2(i),py2(v),3,0,7);ctx.fill();});
+  ctx.fillStyle=rgb(T.muted);ctx.font='9px sans-serif';ctx.textAlign='left';
+  ctx.fillText('总览',10,10);ctx.fillText('放大',zx+8,10);}
+
+// ---------- T3 绘图 ----------
+function dNet(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const cx=W/2,cy=H/2+2,R=Math.min(W,H)*0.3;
+  const nodes=[[cx,cy]];
+  for(let i=0;i<6;i++)nodes.push([cx+Math.cos(i*Math.PI/3)*R,cy+Math.sin(i*Math.PI/3)*R]);
+  nodes.push([cx+Math.cos(1)*R*1.45,cy+Math.sin(1)*R*1.45],[cx+Math.cos(4.2)*R*1.45,cy+Math.sin(4.2)*R*1.45]);
+  const edges=[[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],[2,7],[5,8],[1,3],[4,6]];
+  edges.forEach(e=>{ctx.strokeStyle=rgba(T.hair,.8);ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(nodes[e[0]][0],nodes[e[0]][1]);ctx.lineTo(nodes[e[1]][0],nodes[e[1]][1]);ctx.stroke();});
+  nodes.forEach((n,i)=>{ctx.fillStyle=rgb(i===0?T.accent:series(T,i%5));
+    ctx.beginPath();ctx.arc(n[0],n[1],i===0?8:5,0,7);ctx.fill();
+    ctx.strokeStyle=rgb(T.card);ctx.lineWidth=1.5;ctx.stroke();});}
+
+function dMosaic(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const groups=[[0.4,[0.7,0.3]],[0.35,[0.5,0.5]],[0.25,[0.3,0.7]]];
+  let x=8;
+  groups.forEach((g,gi)=>{const gw=(W-16)*g[0];let y=8;
+    g[1].forEach((p,pi)=>{const ph=(H-16)*p;
+      ctx.fillStyle=rgba(series(T,gi),pi?0.45:0.9);
+      ctx.fillRect(x+1,y+1,gw-2,ph-2);y+=ph;});
+    x+=gw;});}
+
+function dArcDiag(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const n=8,y=H-22,x0=22,w=W-44;
+  const links=[[0,3],[1,5],[2,6],[3,7],[4,7],[0,5],[1,4]];
+  links.forEach((l,i)=>{const x1=x0+w*l[0]/(n-1),x2=x0+w*l[1]/(n-1);
+    ctx.beginPath();ctx.moveTo(x1,y);ctx.quadraticCurveTo((x1+x2)/2,y-Math.abs(x2-x1)*0.62,x2,y);
+    ctx.strokeStyle=rgba(series(T,i%4),.6);ctx.lineWidth=2;ctx.stroke();});
+  for(let i=0;i<n;i++){const x=x0+w*i/(n-1);
+    ctx.fillStyle=rgb(series(T,i%5));ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.fill();
+    ctx.strokeStyle=rgb(T.card);ctx.lineWidth=1.5;ctx.stroke();}}
+
+function dWord(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const words=[['袭击',22,0.5,0.28,T.dead],['丰收',18,0.22,0.24,T.alive],['研究',16,0.76,0.26,T.info],
+    ['贸易',15,0.68,0.56,T.accent],['建造',14,0.3,0.55,T.warn],['社交',12,0.14,0.72,T.muted],
+    ['医疗',11,0.85,0.74,T.info],['烹饪',10,0.32,0.86,T.alive],['采矿',9,0.58,0.88,T.accent],['驯兽',9,0.78,0.9,T.warn]];
+  words.forEach(w=>{ctx.fillStyle=rgb(w[4]);ctx.font=`600 ${w[1]}px sans-serif`;ctx.textAlign='center';
+    ctx.fillText(w[0],w[2]*W,w[3]*H);});}
+
+function ribbon(ctx,x1,y1,x2,y2,th,col){
+  ctx.beginPath();ctx.moveTo(x1,y1-th/2);
+  ctx.bezierCurveTo((x1+x2)/2,y1-th/2,(x1+x2)/2,y2-th/2,x2,y2-th/2);
+  ctx.lineTo(x2,y2+th/2);
+  ctx.bezierCurveTo((x1+x2)/2,y2+th/2,(x1+x2)/2,y1+th/2,x1,y1+th/2);
+  ctx.closePath();ctx.fillStyle=col;ctx.fill();}
+
+function dSankey(ctx,T,W,H){cardBG(ctx,T,W,H);
+  ribbon(ctx,46,24,W-42,39,18,rgba(T.accent,.55));
+  ribbon(ctx,46,64,W-42,39,20,rgba(T.info,.55));
+  ribbon(ctx,46,64,W-42,88,16,rgba(T.info,.35));
+  ribbon(ctx,46,104,W-42,88,14,rgba(T.alive,.5));
+  [[26,14,20],[26,52,26],[26,96,16]].forEach((n,i)=>{ctx.fillStyle=rgb(series(T,i));ctx.fillRect(n[0],n[1],16,n[2]);});
+  [[W-42,24,30],[W-42,76,26]].forEach(n=>{ctx.fillStyle=rgb(T.warn);ctx.fillRect(n[0],n[1],16,n[2]);});
+  ctx.fillStyle=rgb(T.muted);ctx.font='9px sans-serif';ctx.textAlign='left';
+  ctx.fillText('来源',26,H-6);ctx.textAlign='right';ctx.fillText('去向',W-26,H-6);}
+
+function dChord(ctx,T,W,H){cardBG(ctx,T,W,H);
+  const cx=W/2,cy=H/2,r=Math.min(W,H)*0.36;
+  const segs=[0.3,0.25,0.2,0.15,0.1];let a=-Math.PI/2;const mids=[];
+  segs.forEach((s,i)=>{const a2=a+s*2*Math.PI-0.05;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,a,a2);ctx.closePath();
+    ctx.fillStyle=rgba(series(T,i),.85);ctx.fill();mids.push((a+a2)/2);a=a2+0.05;});
+  [[0,2],[1,3],[2,4],[0,4]].forEach((p,i)=>{
+    const m1=mids[p[0]],m2=mids[p[1]];
+    const x1=cx+Math.cos(m1)*r*0.9,y1=cy+Math.sin(m1)*r*0.9;
+    const x2=cx+Math.cos(m2)*r*0.9,y2=cy+Math.sin(m2)*r*0.9;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo(cx,cy,x2,y2);
+    ctx.strokeStyle=rgba(series(T,i),.5);ctx.lineWidth=3;ctx.stroke();});}
+
+// ---------- 目录 ----------
+const TIER_NAMES=['T0 复用原子（0–1 人日）','T1 简单几何（1–2 人日）','T2 算法件（2.5–4 人日）','T3 复杂布局（4–6 人日）'];
+const TIER_DESC=[
+ '直接复用 v1.0 已有原子或纯几何绘制，无需坐标系子系统，可立即落地。',
+ '需要基础坐标映射（像素↔数值），但几何简单；可共享一个轻量 Axis 助手。',
+ '需要 Charts 子系统：刻度算法/统计函数/命中测试/双刻度对齐——v1.1 主体工作量。',
+ '复杂布局算法（力导向/嵌套划分/流布局/弧几何），建议逐项评估后再排期。'];
+
+const CHARTS=[
+ // T0
+ {t:'迷你走势 Sparkline',tier:0,cost:0.5,tag:'yes',note:'KPI 内嵌走势，零贴图',draw:dSpark},
+ {t:'KPI 数字卡',tier:0,cost:0.5,tag:'yes',note:'大数字+环比，Home Overview 已实证同款',draw:dKpi},
+ {t:'容量条 CapacityBar',tier:0,cost:0,tag:'yes',reuse:'已有 CapacityBar',note:'超载虚线段已内建',draw:dCap},
+ {t:'斜切进度 FillWipe',tier:0,cost:0,tag:'yes',reuse:'已有 FillWipe',note:'零贴图斜切进度',draw:dWipe},
+ {t:'进度环 Gauge',tier:0,cost:1,tag:'yes',note:'arc 直绘，状态色随令牌',draw:dGauge},
+ {t:'半环进度组',tier:0,cost:1,tag:'yes',note:'多资源并排小环',draw:dMultiGauge},
+ {t:'温度计 Thermometer',tier:0,cost:1,tag:'yes',note:'竖管+刻度，情绪/温度单值',draw:dThermo},
+ {t:'华夫图 Waffle',tier:0,cost:1,tag:'yes',note:'网格方点占比，几何零贴图',draw:dWaffle},
+ {t:'子弹图 Bullet',tier:0,cost:1,tag:'yes',note:'实际 vs 目标 + 区间带',draw:dBullet},
+ {t:'棒棒糖图 Lollipop',tier:0,cost:1,tag:'yes',note:'条形图轻量替身',draw:dLolli},
+ {t:'时间轴 Timeline',tier:0,cost:1,tag:'yes',reuse:'档案馆已实证',note:'上下交错标签',draw:dTimeline},
+ {t:'事件流 EventStream',tier:0,cost:1,tag:'yes',note:'权重圆点，重要度编码尺寸/色',draw:dEvents},
+ // T1
+ {t:'条形图 Bar',tier:1,cost:1,tag:'yes',note:'纵轴网格 + 类目标签',draw:dBar},
+ {t:'水平条形 BarH',tier:1,cost:1,tag:'yes',note:'长类目名友好',draw:dBarH},
+ {t:'饼图 Pie',tier:1,cost:1,tag:'yes',note:'扇区直绘 + 图例',draw:dPie},
+ {t:'环形图 Donut',tier:1,cost:1,tag:'yes',note:'中心留白可放大数字',draw:dDonut},
+ {t:'折线图 Line',tier:1,cost:1.5,tag:'yes',note:'多序列 + 面积填充，无均线',draw:dLine},
+ {t:'阶梯线 Step',tier:1,cost:1.5,tag:'yes',note:'库存/人口等阶跃量',draw:dStep},
+ {t:'面积图 Area',tier:1,cost:1.5,tag:'yes',note:'单序列趋势 + 填充',draw:dArea},
+ {t:'分组条形 Grouped',tier:1,cost:1.5,tag:'yes',note:'双序列并排对比',draw:dGrouped},
+ {t:'堆叠条形 Stacked',tier:1,cost:1.5,tag:'yes',note:'构成 + 总量一体',draw:dStacked},
+ {t:'直方图 Histogram',tier:1,cost:1.5,tag:'yes',note:'分布 bins，需分桶算法',draw:dHist},
+ {t:'散点图 Scatter',tier:1,cost:1.5,tag:'yes',note:'二维相关',draw:dScatter},
+ {t:'堆叠面积 StackedArea',tier:1,cost:2,tag:'yes',note:'构成随时间演化',draw:dStackArea},
+ {t:'多环嵌套 Donut×2',tier:1,cost:2,tag:'yes',note:'双层次构成',draw:dNested},
+ {t:'象限散点 Quadrant',tier:1,cost:2,tag:'yes',note:'中位线分割 + 四象限标签',draw:dQuad},
+ {t:'气泡图 Bubble',tier:1,cost:2,tag:'yes',note:'半径编码第三维',draw:dBubble},
+ {t:'漏斗图 Funnel',tier:1,cost:2,tag:'yes',note:'阶段转化',draw:dFunnel},
+ {t:'斜率图 Slopegraph',tier:1,cost:2,tag:'yes',note:'前后对比，升绿降红',draw:dSlope},
+ {t:'日历热力 Calendar',tier:1,cost:2,tag:'yes',note:'周×日格，打卡式强度',draw:dCal},
+ {t:'甘特图 Gantt',tier:1,cost:2,tag:'yes',note:'建造/工序计划条',draw:dGantt},
+ // T2
+ {t:'热力图 Heatmap',tier:2,cost:2.5,tag:'warn',note:'中大规模需脏矩形复用',draw:dHeat},
+ {t:'瀑布图 Waterfall',tier:2,cost:2.5,tag:'yes',note:'盈亏瀑布，浮条 + 累计',draw:dWaterfall},
+ {t:'雷达图 Radar',tier:2,cost:3,tag:'warn',note:'极坐标几何自算，纯数学',draw:dRadar},
+ {t:'极坐标玫瑰 Rose',tier:2,cost:3,tag:'warn',note:'环形条形，风向/时段分布',draw:dRose},
+ {t:'箱线图 Boxplot',tier:2,cost:3,tag:'warn',note:'五数概括，需统计件',draw:dBox},
+ {t:'双轴图 DualAxis',tier:2,cost:3,tag:'warn',note:'双刻度对齐是难点',draw:dDual},
+ {t:'K线图 Candlestick',tier:2,cost:3,tag:'yes',note:'OHLC 矩形+影线，无均线',draw:dCandle},
+ {t:'平行坐标 Parallel',tier:2,cost:3.5,tag:'warn',note:'多维个体对比',draw:dPar},
+ {t:'河流图 Streamgraph',tier:2,cost:3.5,tag:'warn',note:'居中基线堆叠，需包络算法',draw:dStream},
+ {t:'十字准线 Crosshair',tier:2,cost:3,tag:'warn',note:'Event 命中测试 + Tooltip',draw:dCross},
+ {t:'缩放平移 ZoomPan',tier:2,cost:4,tag:'warn',note:'总览+放大双视图，Dirty 控制',draw:dZoom},
+ // T3
+ {t:'网络图 Network',tier:3,cost:4,tag:'warn',reuse:'NodeGraph 已有（P8）',note:'力导向布局需迭代收敛',draw:dNet},
+ {t:'马赛克图 Mosaic',tier:3,cost:4,tag:'warn',note:'宽=规模，高=构成，嵌套划分',draw:dMosaic},
+ {t:'关系弧 ArcDiagram',tier:3,cost:5,tag:'warn',note:'一维节点 + 弧高=距离',draw:dArcDiag},
+ {t:'词云 WordCloud',tier:3,cost:5,tag:'warn',note:'逐词测量布局，成本高价值存疑',draw:dWord},
+ {t:'桑基图 Sankey',tier:3,cost:6,tag:'warn',note:'节点列 + 贝塞尔流带，需流量分配',draw:dSankey},
+ {t:'和弦图 Chord',tier:3,cost:6,tag:'warn',note:'弧段 + 弦连接，角度分配复杂',draw:dChord},
+];
+
+function chips(){
+  const total=CHARTS.reduce((s,c)=>s+c.cost,0);
+  const per=t=>CHARTS.filter(c=>c.tier===t).length;
+  document.getElementById('chips').innerHTML=
+    `<span class="chip">图表 <b>${CHARTS.length}</b> 项</span>`+
+    [0,1,2,3].map(t=>`<span class="chip">${TIER_NAMES[t].split('（')[0]} <b>${per(t)}</b></span>`).join('')+
+    `<span class="chip">过滤 <b>8</b> 项</span><span class="chip">合计预估 <b>≈${Math.round(total)}</b> 人日</span>`;
+}
+function buildTiers(){
+  const box=document.getElementById('tiers');
+  [0,1,2,3].forEach(t=>{
+    const items=CHARTS.filter(c=>c.tier===t);
+    const sec=document.createElement('div');sec.id='tier'+t;
+    sec.innerHTML=`<div class="tier-band"><span class="tn">${TIER_NAMES[t]}</span><span class="td">${TIER_DESC[t]}</span></div>
+      <div class="grid" data-tier="${t}"></div>`;
+    box.appendChild(sec);
+    const grid=sec.querySelector('.grid');
+    items.forEach(c=>{
+      const card=document.createElement('div');card.className='chart-card';card.dataset.tier=c.tier;
+      const tagCls=c.tag==='yes'?'t-yes':'t-warn';
+      card.innerHTML=`<div class="head"><span class="title">${c.t}</span>
+        <span class="right">${c.reuse?`<span class="tag t-re">${c.reuse}</span>`:''}
+        <span class="tag ${tagCls}">${c.tag==='yes'?'✅':'⚠️'}</span><span class="cost">${c.cost} 人日</span></span></div>
+        <div class="body"><canvas></canvas></div><div class="foot">${c.note}</div>`;
+      grid.appendChild(card);
+    });
+  });
+}
+function buildSummary(){
+  const tb=document.getElementById('summary');
+  const sorted=[...CHARTS].sort((a,b)=>a.cost-b.cost);
+  tb.innerHTML='<thead><tr><th>#</th><th>图表</th><th>档位</th><th>预估</th><th>评级</th><th>状态</th></tr></thead><tbody>'+
+    sorted.map((c,i)=>`<tr><td>${i+1}</td><td>${c.t}</td><td>T${c.tier}</td><td>${c.cost} 人日</td>
+      <td><span class="tag ${c.tag==='yes'?'t-yes':'t-warn'}">${c.tag==='yes'?'✅ 原生':'⚠️ 有代价'}</span></td>
+      <td>${c.reuse?`<span class="tag t-re">${c.reuse}</span>`:'需新增'}</td></tr>`).join('')+'</tbody>';
+}
+function render(){
+  const T=THEMES[curTheme];
+  const root=document.documentElement.style;
+  root.setProperty('--bg',rgb(T.window));root.setProperty('--panel',rgb(T.panel));
+  root.setProperty('--card',rgb(T.card));root.setProperty('--text',rgb(T.text));
+  root.setProperty('--muted',rgb(T.muted));root.setProperty('--border',rgb(T.border));
+  root.setProperty('--accent',rgb(T.accent));
+  document.querySelectorAll('.chart-card').forEach(card=>{
+    const title=card.querySelector('.title').textContent;
+    const c=CHARTS.find(x=>x.t===title);
+    const cv=card.querySelector('canvas'),ctx=cv.getContext('2d');
+    const dpr=window.devicePixelRatio||1,cssW=cv.clientWidth,cssH=150;
+    cv.width=cssW*dpr;cv.height=cssH*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cssW,cssH);
+    c.draw(ctx,T,cssW,cssH);
+  });
+}
+function applyFilter(){
+  document.querySelectorAll('.chart-card').forEach(c=>{
+    c.style.display=(curFilter==='all'||+c.dataset.tier===+curFilter)?'':'none';});
+  [0,1,2,3].forEach(t=>{
+    document.getElementById('tier'+t).style.display=(curFilter==='all'||+curFilter===t)?'':'none';});
+}
+function setTheme(k){curTheme=k;
+  document.getElementById('th-dark').classList.toggle('active',k==='dark');
+  document.getElementById('th-vanilla').classList.toggle('active',k==='vanilla');render();}
+
+chips();buildTiers();buildSummary();setTheme('dark');
+document.querySelectorAll('.btn[data-f]').forEach(b=>b.onclick=()=>{
+  curFilter=b.dataset.f;
+  document.querySelectorAll('.btn[data-f]').forEach(x=>x.classList.toggle('active',x===b));
+  applyFilter();});
+document.getElementById('th-dark').onclick=()=>setTheme('dark');
+document.getElementById('th-vanilla').onclick=()=>setTheme('vanilla');
+window.addEventListener('resize',render);
+</script>
+</body>
+</html>

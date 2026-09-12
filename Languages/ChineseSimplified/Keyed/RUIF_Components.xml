@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <!-- RUIF 组件文案（v2.1.0「Keyed 化」：组件层不再硬编码任何界面文字）
+       命名空间 RUIF.Comp.*；占位符 {0}/{1} 按 NamedArgument 的传入位置取。
+       取用点统一为框架内部 Tr.Get(...)（见 Source/Core/Tr.cs）。 -->
+
+  <!-- 通用 -->
+  <RUIF.Comp.Common.OK>确定</RUIF.Comp.Common.OK>
+  <RUIF.Comp.Common.Confirm>确认</RUIF.Comp.Common.Confirm>
+  <RUIF.Comp.Common.Cancel>取消</RUIF.Comp.Common.Cancel>
+  <RUIF.Comp.Common.Execute>执行</RUIF.Comp.Common.Execute>
+  <RUIF.Comp.Common.Apply>套用</RUIF.Comp.Common.Apply>
+  <RUIF.Comp.Common.View>查看</RUIF.Comp.Common.View>
+  <RUIF.Comp.Common.Undo>撤销</RUIF.Comp.Common.Undo>
+  <RUIF.Comp.Undo.Done>已{0}</RUIF.Comp.Undo.Done>
+  <RUIF.Comp.Common.Rebind>改键</RUIF.Comp.Common.Rebind>
+  <RUIF.Comp.Common.Max>最大</RUIF.Comp.Common.Max>
+  <RUIF.Comp.Common.Snap>吸附</RUIF.Comp.Common.Snap>
+  <RUIF.Comp.Common.Lower>下限</RUIF.Comp.Common.Lower>
+  <RUIF.Comp.Common.Upper>上限</RUIF.Comp.Common.Upper>
+  <RUIF.Comp.Common.On>开</RUIF.Comp.Common.On>
+  <RUIF.Comp.Common.Off>关</RUIF.Comp.Common.Off>
+  <RUIF.Comp.Common.Current>（当前）</RUIF.Comp.Common.Current>
+  <RUIF.Comp.Common.More>更多 {0}</RUIF.Comp.Common.More>
+  <RUIF.Comp.Common.Page>第 {0}/{1} 页</RUIF.Comp.Common.Page>
+  <RUIF.Comp.Common.Preset>预设</RUIF.Comp.Common.Preset>
+  <RUIF.Comp.Common.SaveAs>存为</RUIF.Comp.Common.SaveAs>
+  <RUIF.Comp.Common.Wheel>滚轮 {0}</RUIF.Comp.Common.Wheel>
+
+  <!-- 导航 -->
+  <RUIF.Comp.Nav.StackDepth>（栈深 {0}）</RUIF.Comp.Nav.StackDepth>
+  <RUIF.Comp.Nav.CommandHint>上下键 选择 · 回车 执行 · Esc 失焦</RUIF.Comp.Nav.CommandHint>
+  <RUIF.Comp.Nav.Time.Paused>暂停（空格）</RUIF.Comp.Nav.Time.Paused>
+  <RUIF.Comp.Nav.Time.Normal>常速（1）</RUIF.Comp.Nav.Time.Normal>
+  <RUIF.Comp.Nav.Time.Fast>快进（2）</RUIF.Comp.Nav.Time.Fast>
+  <RUIF.Comp.Nav.Time.Superfast>极快（3）</RUIF.Comp.Nav.Time.Superfast>
+
+  <!-- 键位冲突 -->
+  <RUIF.Comp.Hotkey.NoConflict>键位：无冲突</RUIF.Comp.Hotkey.NoConflict>
+  <RUIF.Comp.Hotkey.Conflict>! 存在重复键位（冲突 {0} 项）· 请改键</RUIF.Comp.Hotkey.Conflict>
+
+  <!-- 工业 -->
+  <RUIF.Comp.Industrial.Bottleneck>瓶颈：{0}　占 {1}%</RUIF.Comp.Industrial.Bottleneck>
+
+  <!-- 缩放 / 表格密度 -->
+  <RUIF.Comp.Zoom.Label>缩放</RUIF.Comp.Zoom.Label>
+  <RUIF.Comp.Zoom.Fit>适配</RUIF.Comp.Zoom.Fit>
+  <RUIF.Comp.Density.Compact>紧凑</RUIF.Comp.Density.Compact>
+  <RUIF.Comp.Density.Normal>标准</RUIF.Comp.Density.Normal>
+  <RUIF.Comp.Density.Cozy>舒适</RUIF.Comp.Density.Cozy>
+
+  <!-- 杂项 / 电力 -->
+  <RUIF.Comp.Points.Remaining>剩余 {0} 点</RUIF.Comp.Points.Remaining>
+  <RUIF.Comp.Points.Overdrawn>超支 {0}</RUIF.Comp.Points.Overdrawn>
+  <RUIF.Comp.Power.Net>净：{0} W</RUIF.Comp.Power.Net>
+
+  <!-- 官方数据 -->
+  <RUIF.Comp.Wealth.Total>总财富 {0}</RUIF.Comp.Wealth.Total>
+  <RUIF.Comp.Tale.Spread>流传 ×{0}</RUIF.Comp.Tale.Spread>
+  <RUIF.Comp.Bill.Paused>已暂停</RUIF.Comp.Bill.Paused>
+  <RUIF.Comp.Bill.Done>完成</RUIF.Comp.Bill.Done>
+  <RUIF.Comp.Bill.InProgress>进行中</RUIF.Comp.Bill.InProgress>
+  <RUIF.Comp.Title.Granted>授予：{0}</RUIF.Comp.Title.Granted>
+  <RUIF.Comp.Ideo.Members>成员 {0}</RUIF.Comp.Ideo.Members>
+  <RUIF.Comp.Ideo.Leader>领袖：{0}</RUIF.Comp.Ideo.Leader>
+  <RUIF.Comp.Caravan.Load>负重</RUIF.Comp.Caravan.Load>
+  <RUIF.Comp.Caravan.Food>口粮 {0} 天 · {1}</RUIF.Comp.Caravan.Food>
+  <RUIF.Comp.Policy.AppliedTo>应用到 {0} 人</RUIF.Comp.Policy.AppliedTo>
+
+  <!-- 关系档位 / 任务剩余 / 相对时间 -->
+  <RUIF.Comp.Relation.Ally>同盟</RUIF.Comp.Relation.Ally>
+  <RUIF.Comp.Relation.Friendly>友好</RUIF.Comp.Relation.Friendly>
+  <RUIF.Comp.Relation.Neutral>中立</RUIF.Comp.Relation.Neutral>
+  <RUIF.Comp.Relation.Hostile>敌对</RUIF.Comp.Relation.Hostile>
+  <RUIF.Comp.Relation.DeadHostile>死敌</RUIF.Comp.Relation.DeadHostile>
+  <RUIF.Comp.Eta.Expired>已到期</RUIF.Comp.Eta.Expired>
+  <RUIF.Comp.Eta.Remaining>剩余 {0} 天</RUIF.Comp.Eta.Remaining>
+  <RUIF.Comp.Relative.JustNow>刚刚</RUIF.Comp.Relative.JustNow>
+  <RUIF.Comp.Relative.Minutes>{0} 分</RUIF.Comp.Relative.Minutes>
+  <RUIF.Comp.Relative.Hours>{0} 时</RUIF.Comp.Relative.Hours>
+  <RUIF.Comp.Relative.Days>{0} 天</RUIF.Comp.Relative.Days>
+</LanguageData>
