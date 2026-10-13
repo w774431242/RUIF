@@ -1,5 +1,0 @@
-RUIF DevDocs（对外开发者包）
-version: 1.0.1
-generated: 2026-09-12 16:25:04
-source: RUIF/docs/*（白名单）
-入口: index.html

@@ -27,17 +27,59 @@ namespace RUIF
         /// <summary>绘制旋转作用域（Caret 展开动画、贴图旋转绘制等）。</summary>
         public static RotateScope Rotate(float angle, Vector2 pivot) => new RotateScope(angle, pivot);
 
-        /// <summary>GUI.matrix 旋转作用域：进入时绕 pivot 旋转，退出时恢复原矩阵。</summary>
+        /// <summary>
+        /// GUI.matrix 旋转作用域：进入时**在当前坐标系内绕 pivot 旋转**，退出时恢复原矩阵。
+        ///
+        /// <para><b>⛔ 不再使用 <c>GUIUtility.RotateAroundPivot</c>（2026-09-12 根因修复）</b>：
+        /// 该 Unity API 把 pivot 当作「**应用旋转前的 GUI 空间**」坐标 —— 其内部实现是先把矩阵归零、
+        /// 再合成 <c>T(p) · R · T(-p) · M</c> ⇒ **p 是在外层矩阵之前解释的**，而不是调用点所在的局部空间。
+        /// 于是只要外层已有平移/裁剪作用域（窗口偏移、<c>GUI.BeginClip</c>、<c>GUI.BeginGroup</c>、
+        /// 滚动视图），"按 rect 局部坐标传 pivot"就会**整体错位**：元素画在容器内、旋转却发生在容器外，
+        /// 结果被甩到容器之外（实测事故：<c>Industrial.Gauge</c> 的 45×N 个 8×3 分区色块飞满整屏，
+        /// 见 `PersonalChronicle` 侧 `制造系统中心_RUIF改造方案.md` §10）。</para>
+        ///
+        /// <para><b>正确语义</b>：构造**局部空间**旋转矩阵并**后乘**当前矩阵
+        /// （<c>M' = M · T(p) · R · T(-p)</c>）—— 语义即"先把绘制点绕**局部 pivot** 旋转，再做外层变换"，
+        /// 与调用点（<c>Draw.Box</c> / <c>Draw.Label</c> 的落点）严格同空间，
+        /// 且与外层矩阵是平移、缩放还是旋转**无关**。调用点因此只需传 rect 局部坐标。</para>
+        /// </summary>
         public readonly struct RotateScope : System.IDisposable
         {
             private readonly Matrix4x4 prev;
             public RotateScope(float angle, Vector2 pivot)
             {
                 prev = GUI.matrix;
-                GUIUtility.RotateAroundPivot(angle, pivot);
+                GUI.matrix = prev * LocalRotation(angle, pivot);
             }
             /// <summary>恢复进入前的 GUI.matrix。</summary>
             public void Dispose() => GUI.matrix = prev;
+        }
+
+        /// <summary>
+        /// **局部空间**旋转矩阵（绕 <paramref name="pivot"/> 旋转 <paramref name="angle"/> 度）：
+        /// <c>T(pivot) · R(angle) · T(-pivot)</c>。纯函数（不读写任何 GUI 状态）⇒ 可离线单测
+        /// （见 `Tests/DrawRotateTests.cs`）。
+        ///
+        /// <para><b>用途与语义</b>：<see cref="RotateScope"/> 把它**后乘**当前 <c>GUI.matrix</c>，
+        /// 得到"在调用点自身坐标系内绕局部 pivot 旋转"的语义 —— 这正是 <c>Draw.Box/Label</c> 传 rect
+        /// 局部坐标时需要的；无论外层矩阵是平移、缩放还是旋转都不受影响。
+        /// 对比：<c>GUIUtility.RotateAroundPivot</c> 的 pivot 是"旋转前的 GUI 空间"语义，
+        /// 在外层有平移/裁剪作用域时会整体错位（详见 <see cref="RotateScope"/> 注释）。</para>
+        /// </summary>
+        internal static Matrix4x4 LocalRotation(float angle, Vector2 pivot)
+        {
+            // 显式展开 T(p)·R·T(-p)（结果 = 绕 p 旋转：q → p + R·(q-p)）：
+            // ⚠️ **不用 Quaternion.Euler / Matrix4x4.TRS** —— 前者经 `Internal_FromEulerRad` 是 ECall，
+            //    在非 Unity 宿主（离线单测）里会抛 `SecurityException`（本框架 ECall 铁律同源）。
+            float rad = angle * Mathf.Deg2Rad;
+            float cos = Mathf.Cos(rad);
+            float sin = Mathf.Sin(rad);
+            return new Matrix4x4(
+                new Vector4(cos, sin, 0f, 0f),                                  // 列 0
+                new Vector4(-sin, cos, 0f, 0f),                                 // 列 1
+                new Vector4(0f, 0f, 1f, 0f),                                    // 列 2
+                new Vector4(pivot.x - cos * pivot.x + sin * pivot.y,            // 列 3 = 平移
+                            pivot.y - sin * pivot.x - cos * pivot.y, 0f, 1f));
         }
 
         /// <summary>GUI.color 作用域。</summary>
@@ -108,11 +150,24 @@ namespace RUIF
         /// <summary>文本（自管 Font / Anchor / Color 三态）。</summary>
         public static void Label(Rect rect, string text, GameFont font, Color color, TextAnchor anchor)
         {
-            using (Font(font))
-            using (Anchor(anchor))
-            using (Color(color))
+            // ⚠ 2026-09-15 修复：显式**禁用自动换行**（保存 / 恢复 `Text.WordWrap`）。
+            // 原版 `Widgets.Label` 遵循**全局** `Text.WordWrap`；一旦链路上某处把它设为 true
+            // 而未恢复，调用方的**定宽标签**就会被折行（消费方实机缺陷：5 字标签「现役殖民者」
+            // 被拆成两行、错乱压到图形上）。本方法作为 L0 文本出口，负责把该全局状态钉死。
+            bool prevWrap = Text.WordWrap;
+            Text.WordWrap = false;
+            try
             {
-                Widgets.Label(rect, text ?? string.Empty);
+                using (Font(font))
+                using (Anchor(anchor))
+                using (Color(color))
+                {
+                    Widgets.Label(rect, text ?? string.Empty);
+                }
+            }
+            finally
+            {
+                Text.WordWrap = prevWrap;
             }
         }
 
@@ -128,6 +183,22 @@ namespace RUIF
         public static void Atlas(Rect rect, Texture2D tex, Color tint)
         {
             using (Color(tint)) Widgets.DrawAtlas(rect, tex);
+        }
+
+        /// <summary>
+        /// 溢出省略标签：放不下时截断并补省略号，而不是让文字被矩形<b>硬切</b>。
+        /// <para>这是"文本被切割"的常规解 —— 硬切一半的字比"…"难看得多，也更难判断是布局错了还是内容真的长。
+        /// 底层 <c>Widgets.LabelEllipses</c>（内部走原版 <c>Text.ClampTextWithEllipsis</c>）。</para>
+        /// <para>与 <see cref="Label"/> 的差别仅在"放不下时的行为"：本方法给你省略号，<see cref="Label"/> 给你裁切。</para>
+        /// </summary>
+        public static void EllipsisLabel(Rect rect, string text, GameFont font, Color color, TextAnchor anchor)
+        {
+            using (Font(font))
+            using (Anchor(anchor))
+            using (Color(color))
+            {
+                Widgets.LabelEllipses(rect, text ?? string.Empty);
+            }
         }
 
         /// <summary>保留 RGB 覆写 alpha（Pill / Badge 的底色派生用）。</summary>

@@ -1,0 +1,80 @@
+
+== 1. 规模与 XML 注释覆盖 ==
+  公开类型 114 / 公开成员 562 / 有 XML 注释 507（90.2%）
+  [HIT] 文档覆盖率仅 90.2%（缺注释 55 个）
+
+== 2. 死公共 API（源码/测试/文档/示例均未引用） ==
+  [HIT] 疑似死 API（零/近零引用，需人工确认是否属对外预留）: 2 个
+    ReorderRowDrawer.BeginInvoke()  (引用 2 次)
+    ReorderRowDrawer.EndInvoke()  (引用 2 次)
+
+== 3. 文档 ? 实现一致性（文档里提到的 API 是否真实存在） ==
+  [OK ] 文档引用的 RUIF.* API 全部存在
+  [OK ] 不含已移除特性的残留引用（Gallery/DevTools/F11）
+
+== 4. 中文硬编码（会进入运行时的字符串字面量） ==
+  [HIT] 组件/内核层中文硬编码 24 处，分布在 8 个文件（用户可见文案应走 Keyed 或由调用方传入）
+    PawnTableAtoms.cs  ×8
+    TexCache.cs  ×5
+    DataCandAtoms.cs  ×4
+    FeedbackCandAtoms.cs  ×3
+    DomainCandAtoms.cs  ×1
+    InputCandAtoms.cs  ×1
+    LayoutCandAtoms.cs  ×1
+    NavCandAtoms.cs  ×1
+
+== 5. 红线扫描 ==
+  [HIT] 红线命中 8 处
+    TexAtoms.cs:75 越白名单 new Color
+    TexAtoms.cs:76 越白名单 new Color
+    TexFmt.cs:80 越白名单 new Color
+    TexFmt.cs:96 越白名单 new Color
+    TexFmt.cs:97 越白名单 new Color
+    TexFmt.cs:98 越白名单 new Color
+    TexFmt.cs:99 越白名单 new Color
+    TexFmt.cs:100 越白名单 new Color
+  [HIT] 组件层出现全局访问 1 处（需确认是否属官方 FloatMenu 通道）
+    PawnTableAtoms.cs:110  Map m = Find.CurrentMap;
+
+== 6. Components 容器分配（需确认是否在点击分支） ==
+  分配点 7 处（人工确认：点击分支=可接受，绘制路径=需改）
+    InputPlusAtoms.cs:118  var seen = new HashSet<string>();
+    InputPlusAtoms.cs:131  var seen = new HashSet<string>();
+    InputPlusAtoms.cs:256  var list = new List<FloatMenuOption>();
+    NavAtoms.cs:32  if (Children == null) Children = new List<TreeNode>();
+    NavAtoms.cs:112  var opts = new List<FloatMenuOption>();
+    NavAtomsB.cs:90  private readonly List<string> entries = new List<string>(NavFmt.StackLimit + 1);
+    NavAtomsB.cs:176  var opts = new List<FloatMenuOption>();
+
+== 7. 测试覆盖（公开类型是否被 Tests 引用） ==
+  公开类型 114，其中未被测试代码提及 28 个
+    未覆盖: ChartCandAtoms
+    未覆盖: ChartCandFmt
+    未覆盖: DataCandAtoms
+    未覆盖: DataCandFmt
+    未覆盖: DomainCandAtoms
+    未覆盖: DomainCandFmt
+    未覆盖: FeedbackAtoms
+    未覆盖: FeedbackAtomsB
+    未覆盖: FeedbackCandAtoms
+    未覆盖: FeedbackCandFmt
+    未覆盖: HiAtoms
+    未覆盖: InputCandAtoms
+    未覆盖: InputCandFmt
+    未覆盖: LayoutCandAtoms
+    未覆盖: Measure
+    未覆盖: NavCandAtoms
+    未覆盖: NavCandFmt
+    未覆盖: OfficialDataAtoms
+    未覆盖: OfficialDataAtomsB
+    未覆盖: OfficialDataAtomsC
+    未覆盖: PawnTableAtoms
+    未覆盖: PawnTableHost
+    未覆盖: ReorderAtoms
+    未覆盖: ReorderFmt
+    未覆盖: ReorderRowDrawer
+    未覆盖: TableCandAtoms
+    未覆盖: TexAtoms
+    未覆盖: TextAtoms
+
+[体检完成] 命中待办项合计 5 组（HIT 表示需要人工判断，不等同于缺陷）

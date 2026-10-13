@@ -1,0 +1,6 @@
+PSVersion=7.6.5
+DefaultEnc=utf-8
+line45_default=                if (bills[i].priority) Draw.Label(r.Take(34f), "▲优先", Tokens.FontLabel, Tokens.Accent, TextAnchor.MiddleRight);
+match_default=1
+line45_utf8=                if (bills[i].priority) Draw.Label(r.Take(34f), "▲优先", Tokens.FontLabel, Tokens.Accent, TextAnchor.MiddleRight);
+match_utf8=1

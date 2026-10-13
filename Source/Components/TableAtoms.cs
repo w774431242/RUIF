@@ -30,13 +30,70 @@ namespace RUIF
         public static float ValueRatio(float value, float reference)
             => reference <= 0f ? 0f : Mathf.Clamp01(value / reference);
 
-        /// <summary>阈值带着色：&lt;0.34 低 / &lt;0.67 中 / 否则高（颜色取自令牌）。</summary>
+        /// <summary>
+        /// 阈值带着色：&lt;0.34 低 / &lt;0.67 中 / 否则高（颜色取自令牌）。
+        /// <para>边界：0.34 与 0.67 归入**高档**（<c>&lt;</c> 开区间下界）。</para>
+        /// </summary>
         public static Color BandColor(float ratio01)
         {
             float r = Mathf.Clamp01(ratio01);
             if (r < 0.34f) return Tokens.Dead;
             if (r < 0.67f) return Tokens.Warn;
             return Tokens.Alive;
+        }
+
+        /// <summary>
+        /// 列样式表 → 该列**表头/数据格**共用的锚点（预览数值列表头亦右对齐）。
+        ///
+        /// <para>越界 / <paramref name="cols"/> 为 null ⇒ <see cref="TextAnchor.MiddleLeft"/>
+        /// （与无列样式时的旧行为完全一致）。</para>
+        /// <para>锚点**只保留水平分量**（行内一律垂直居中）：<c>default(TextAnchor)</c> 是
+        /// <c>UpperLeft</c>，零初始化的 <c>StatCol</c> 若不归一化会把文本顶到行顶。</para>
+        /// </summary>
+        public static TextAnchor ColumnAlignOf(StatCol[] cols, int col)
+        {
+            if (cols == null || col < 0 || col >= cols.Length) return TextAnchor.MiddleLeft;
+            switch (cols[col].Align)
+            {
+                case TextAnchor.MiddleCenter:
+                case TextAnchor.UpperCenter:
+                case TextAnchor.LowerCenter:
+                    return TextAnchor.MiddleCenter;
+                case TextAnchor.MiddleRight:
+                case TextAnchor.UpperRight:
+                case TextAnchor.LowerRight:
+                    return TextAnchor.MiddleRight;
+                default:                       // MiddleLeft / UpperLeft / LowerLeft / 零初始化
+                    return TextAnchor.MiddleLeft;
+            }
+        }
+
+        /// <summary>该列是否用 <see cref="Tokens.Dim"/> 前景（预览 `#` / 占比 / 参与季数列为 `--dim`）。
+        /// 越界 / 无列样式 ⇒ false（= 旧行为：统一 <see cref="Tokens.Text"/>）。</summary>
+        public static bool IsDimColumn(StatCol[] cols, int col)
+            => cols != null && col >= 0 && col < cols.Length && cols[col].Dim;
+
+        /// <summary>该列是否走阈值带色格。<paramref name="bandCol"/> &lt; 0 表示**无带色列**。</summary>
+        public static bool IsBandCol(int bandCol, int col)
+            => bandCol >= 0 && col == bandCol;
+
+        /// <summary>
+        /// 带色列的**显示文本**：优先调用方提供的文本（如千分位 <c>6,980</c>）；
+        /// 缺失（null / 空 / 下标越界）回退 <c>(value*scale).ToString("0.#")</c>；两者都缺 ⇒ 空串。
+        /// <para><paramref name="scale"/> 供"比例值按百分比显示"等场景换算（默认 1 = 原值）。</para>
+        /// </summary>
+        public static string BandTextOf(float[] values, string[] texts, int row, float scale = 1f)
+        {
+            if (row < 0) return string.Empty;
+            if (texts != null && row < texts.Length && !string.IsNullOrEmpty(texts[row]))
+            {
+                return texts[row];
+            }
+            if (values != null && row < values.Length)
+            {
+                return (values[row] * scale).ToString("0.#");
+            }
+            return string.Empty;
         }
 
         /// <summary>列宽拖动结果（钳制在 min~max）。</summary>
@@ -79,12 +136,23 @@ namespace RUIF
             return Widgets.ButtonInvisible(rect);
         }
 
-        /// <summary>阈值着色数值单元（底为带色 22% 叠加）。</summary>
+        /// <summary>
+        /// 阈值着色数值单元（**旧签名 · 保持字节级等价**）：文本由 <c>value.ToString("0.#")</c> 生成。
+        /// 委托到文本透传重载（单一实现）。
+        /// </summary>
         public static void ValueCell(Rect rect, float value, float reference)
+            => ValueCell(rect, value.ToString("0.#"), value, reference);
+
+        /// <summary>
+        /// 阈值着色数值单元（**文本透传**）：底为带色 22% 叠加、文字用同色右对齐。
+        /// <para>给千分位等**已格式化**文本用（如 <c>"6,980"</c>）——格式化规则归调用方（LOC-002：
+        /// 数字格式与语言相关，不写死在组件里）。</para>
+        /// </summary>
+        public static void ValueCell(Rect rect, string text, float value, float reference)
         {
             Color c = TableFmt.BandColor(TableFmt.ValueRatio(value, reference));
             Draw.Box(rect, Draw.WithAlpha(c, 0.22f));
-            Draw.Label(rect, value.ToString("0.#"), Tokens.FontLabel, c, TextAnchor.MiddleRight);
+            Draw.Label(rect, text ?? string.Empty, Tokens.FontLabel, c, TextAnchor.MiddleRight);
         }
 
         /// <summary>

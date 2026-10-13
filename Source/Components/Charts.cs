@@ -103,6 +103,17 @@ namespace RUIF
     {
         private static readonly float[] tickBuf = new float[8];   // 框架复用缓冲（IMGUI 单线程，安全）
 
+        /// <summary>
+        /// 刻度标签列宽（绘图区**右侧外部**的轴列，由 <see cref="PlotArea"/> 预留）。
+        /// <para>调用方若要在图外自画"天标签 / 类目标签"等与柱/线**逐列对齐**的内容，
+        /// 必须用 <see cref="PlotRectOf"/> 取绘图区，而不是拿传入 rect 直接算 ——
+        /// 否则会与本组件内部的柱/线几何错开一整个轴列宽。</para>
+        /// </summary>
+        public const float AxisLabelW = 34f;
+
+        /// <summary>刻度标签行高（12px，与 <see cref="Tokens.FontLabel"/> 的实际字高匹配）。</summary>
+        private const float AxisLabelH = 12f;
+
         // ---- 走势 Sparkline（T0 头牌：局部 min/max 自适应幅度） ----
 
         /// <summary>迷你走势线。自适应局部幅度，适合 KPI 卡内嵌；单系列、无轴。</summary>
@@ -113,15 +124,62 @@ namespace RUIF
             ChartsFmt.SeriesRange(values, 1f, out float lo, out float hi);
             Color c = color ?? Tokens.Accent;
             float stepX = r.width / (values.Length - 1);
-            Vector2 prev = Pt(r, 0, values[0], lo, hi, stepX);
-            if (dots) Draw.Box(new Rect(prev.x - 1.5f, prev.y - 1.5f, 3f, 3f), c);
-            for (int i = 1; i < values.Length; i++)
+
+            // ★ 折线**烘焙成贴图**：CPU 算端点 → TexFmt.Polyline 写像素 → 一次 GUI.DrawTexture。
+            //   ⛔ 不再用 Widgets.DrawLine —— 它内部改 **GL 矩阵**（GL.PushMatrix/GL.MultMatrix），
+            //      与含滚动平移的 GUI.matrix 互不感知 ⇒ **在滚动视图内折线会飞散**（2026-09-13 实证）。
+            //   键 = 数据指纹 + 尺寸 + 线宽 + 颜色 ⇒ **数据变则键变**，无需调用方传版本号。
+            int tw = Mathf.Max(8, Mathf.CeilToInt(r.width));
+            int th = Mathf.Max(8, Mathf.CeilToInt(r.height));
+            long key = TexCache.KeyData(0x55, ChartDataHash(values),
+                tw * 4096 + th, Mathf.RoundToInt(thickness * 8f), ChartFoldRgb(c));
+            Texture2D tex;
+            if (!TexCache.TryGet(key, out tex))
             {
-                Vector2 p = Pt(r, i, values[i], lo, hi, stepX);
-                Widgets.DrawLine(prev, p, c, thickness);
-                if (dots) Draw.Box(new Rect(p.x - 1.5f, p.y - 1.5f, 3f, 3f), c);
-                prev = p;
+                float[] xs = new float[values.Length];
+                float[] ys = new float[values.Length];
+                for (int i = 0; i < values.Length; i++)
+                {
+                    Vector2 q = Pt(r, i, values[i], lo, hi, stepX);
+                    xs[i] = q.x - r.x;            // 转到贴图局部像素坐标
+                    ys[i] = q.y - r.y;
+                }
+                Color32[] px = new Color32[tw * th];
+                TexFmt.Polyline(px, tw, th, xs, ys, c, thickness);
+                tex = TexCache.Publish(key, tw, th, px, "Sparkline");
             }
+            if (tex != null)
+                using (Draw.Color(Color.white)) GUI.DrawTexture(r, tex);
+
+            // 点（3×3 方块）是**轴对齐**的，不碰矩阵 ⇒ 直接画，无需烘焙
+            if (dots)
+                for (int i = 0; i < values.Length; i++)
+                {
+                    Vector2 p = Pt(r, i, values[i], lo, hi, stepX);
+                    Draw.Box(new Rect(p.x - 1.5f, p.y - 1.5f, 3f, 3f), c);
+                }
+        }
+
+        /// <summary>
+        /// 值数组的指纹（FNV-1a）。**量化到 1/256** —— 吸收浮点抖动，
+        /// 使「值稳定但末位有噪声」的数据仍能命中缓存；真正变化超过 1/256 才重烘焙。
+        /// </summary>
+        private static long ChartDataHash(float[] v)
+        {
+            unchecked
+            {
+                long h = 1469598103934665603L;
+                for (int i = 0; i < v.Length; i++)
+                    h = (h ^ Mathf.RoundToInt(v[i] * 256f)) * 1099511628211L;
+                return h;
+            }
+        }
+
+        /// <summary>颜色折叠成 24 位（供 <see cref="TexCache.KeyData"/> 用）。</summary>
+        private static int ChartFoldRgb(Color c)
+        {
+            Color32 q = c;
+            return (q.r << 16) | (q.g << 8) | q.b;
         }
 
         // ---- 柱状 ----
@@ -142,8 +200,14 @@ namespace RUIF
                 float h = Mathf.Max(1f, ChartsFmt.Scale(values[i], 0f, hi, 0f, plot.height));
                 Draw.Box(new Rect(plot.x + xo, plot.yMax - h, bw, h), c);
                 if (hasLabels && i < labels.Length)
-                    Draw.Label(new Rect(plot.x + xo - 2f, plot.yMax + 1f, bw + 4f, 13f),
+                {
+                    // 类目标签（轴下方）。⚠ 原写死 13f + `LowerCenter`：`GUI.Label` 不裁切 ⇒
+                    // 文字底边锚在 rect 底、顶端按真实行高向上外溢 9px，压进柱区。
+                    // 高度必须取引擎行高（与 PlotArea 的预留带同源），否则"预留"与"实画"又对不上。
+                    float bh = Measure.RowHeight(Tokens.FontLabel);
+                    Draw.Label(new Rect(plot.x + xo - 2f, plot.yMax + 1f, bw + 4f, bh),
                         labels[i], Tokens.FontLabel, Tokens.Dim, TextAnchor.LowerCenter);
+                }
             }
         }
 
@@ -190,19 +254,24 @@ namespace RUIF
                 if (totals[i] > colMax) colMax = totals[i];
             }
             if (colMax <= 0f) colMax = 1f;
-            GridH(r, colMax);
+            // ⚠ 2026-10-05 修：原为 `GridH(r, colMax)` + 按 `r` 算柱几何 —— 本组件**唯一**
+            //   不取 PlotArea 的图表 ⇒ 网格与柱都铺满整个 rect：刻度标签会盖住最右一列柱，
+            //   最高刻度标签还会顶出上边界。现统一走 PlotArea（网格、柱几何、柱高三者同源）。
+            Rect plot = PlotArea(r, false);
+            GridH(plot, colMax);
             float gap = Tokens.GridGap;
             for (int i = 0; i < cols; i++)
             {
-                ChartsFmt.BarGeom(i, cols, r.width, gap, out float bw, out float xo);
+                ChartsFmt.BarGeom(i, cols, plot.width, gap, out float bw, out float xo);
                 float cum = 0f;
                 for (int j = 0; j < series.Length; j++)
                 {
                     if (series[j] == null || i >= series[j].Length) continue;
                     float v = series[j][i];
                     if (v <= 0f) continue;
-                    float h = ChartsFmt.Scale(v, 0f, colMax, 0f, r.height);
-                    Draw.Box(new Rect(r.x + xo, r.yMax - cum - h, bw, Mathf.Max(1f, h)), Tokens.Series(j));
+                    float h = ChartsFmt.Scale(v, 0f, colMax, 0f, plot.height);
+                    Draw.Box(new Rect(plot.x + xo, plot.yMax - cum - h, bw, Mathf.Max(1f, h)),
+                        Tokens.Series(j));
                     cum += h;
                 }
             }
@@ -217,21 +286,83 @@ namespace RUIF
             if (values == null || values.Length < 2) return;
             Rect plot = PlotArea(r, false);
             float hi = ChartsFmt.SeriesMax(values);
-            if (grid) GridH(plot, hi);
-            Color c = color ?? Tokens.Accent;
-            float stepX = plot.width / (values.Length - 1);
-            Vector2 prev = Pt(plot, 0, values[0], 0f, hi, stepX);
-            if (dots) Draw.Box(new Rect(prev.x - 1.5f, prev.y - 1.5f, 3f, 3f), c);
-            for (int i = 1; i < values.Length; i++)
+            if (grid) GridH(plot, hi);       // 网格走 Draw.LineH → Widgets.DrawLineHorizontal → GUI.DrawTexture（轴对齐、安全）
+            DrawLineSeries(plot, values, color ?? Tokens.Accent, hi, dots);
+        }
+
+        /// <summary>
+        /// **多系列折线**（每系列一色，**共享 y 轴与网格**）—— 用于"多线趋势"（如
+        /// 自由 / 奴隶 / 囚犯三条人数线）。各行独立走贴图烘焙与缓存（键含数据哈希与颜色 ⇒ 不串）。
+        /// <paramref name="colors"/> 长度不足或为 null 时，未覆盖序列回落 <c>Tokens.Series(s)</c>。
+        /// </summary>
+        public static void LineChart(Rect r, float[][] series, Color[] colors,
+            bool dots = true, bool grid = true)
+        {
+            if (series == null || series.Length == 0) return;
+            // 共享 y 上界 = 各系列最大值（保证多条线可横向比较；1f 兜底避免除零）
+            float hi = 1f;
+            bool any = false;
+            for (int s = 0; s < series.Length; s++)
             {
-                Vector2 p = Pt(plot, i, values[i], 0f, hi, stepX);
-                Widgets.DrawLine(prev, p, c, 1.5f);
-                if (dots) Draw.Box(new Rect(p.x - 1.5f, p.y - 1.5f, 3f, 3f), c);
-                prev = p;
+                if (series[s] != null && series[s].Length >= 2)
+                {
+                    hi = Mathf.Max(hi, ChartsFmt.SeriesMax(series[s]));
+                    any = true;
+                }
+            }
+            if (!any) return;
+            Rect plot = PlotArea(r, false);
+            if (grid) GridH(plot, hi);
+            for (int s = 0; s < series.Length; s++)
+            {
+                float[] values = series[s];
+                if (values == null || values.Length < 2) continue;
+                Color c = colors != null && s < colors.Length ? colors[s] : Tokens.Series(s);
+                DrawLineSeries(plot, values, c, hi, dots);
             }
         }
 
-        /// <summary>面积图：折线 + 半透明填充（逐段垂直填充的阶梯近似，已知取舍见类注释）。</summary>
+        /// <summary>单系列折线的落笔（贴图烘焙 + 可选端点）；单/多系列入口共用。</summary>
+        private static void DrawLineSeries(Rect plot, float[] values, Color c, float hi, bool dots)
+        {
+            float stepX = plot.width / (values.Length - 1);
+            // ★ 同 Sparkline：折线**烘焙成贴图**，一次 GUI.DrawTexture（零矩阵、零 GL）。
+            //   贴图覆盖 **plot**（不是 r），并按 plot 的位置绘制。
+            int tw = Mathf.Max(8, Mathf.CeilToInt(plot.width));
+            int th = Mathf.Max(8, Mathf.CeilToInt(plot.height));
+            long key = TexCache.KeyData(0x56, ChartDataHash(values), tw * 4096 + th, 12, ChartFoldRgb(c));
+            Texture2D tex;
+            if (!TexCache.TryGet(key, out tex))
+            {
+                float[] xs = new float[values.Length];
+                float[] ys = new float[values.Length];
+                for (int i = 0; i < values.Length; i++)
+                {
+                    Vector2 q = Pt(plot, i, values[i], 0f, hi, stepX);
+                    xs[i] = q.x - plot.x;
+                    ys[i] = q.y - plot.y;
+                }
+                Color32[] px = new Color32[tw * th];
+                TexFmt.Polyline(px, tw, th, xs, ys, c, 1.5f);
+                tex = TexCache.Publish(key, tw, th, px, "LineChart");
+            }
+            if (tex != null)
+                using (Draw.Color(Color.white)) GUI.DrawTexture(plot, tex);
+
+            if (dots)
+                for (int i = 0; i < values.Length; i++)
+                {
+                    Vector2 p = Pt(plot, i, values[i], 0f, hi, stepX);
+                    Draw.Box(new Rect(p.x - 1.5f, p.y - 1.5f, 3f, 3f), c);
+                }
+        }
+
+        /// <summary>
+        /// 面积图：折线 + 半透明填充。
+        /// 填充 = **段内细分竖条 + 线性插值**逼近真实折线轮廓（旧实现一段一柱 ⇒ 视觉呈
+        /// 锯齿阶梯，用户实机反馈「优化综合能力趋势图」）；每段按 ~3px 细分，
+        /// 11 点 × 6 细分 ≈ 60 个 Box，零矩阵零贴图，开销可忽略。底部补一条落地基线。
+        /// </summary>
         public static void AreaChart(Rect r, float[] values, Color? color = null)
         {
             if (values == null || values.Length < 2) return;
@@ -240,12 +371,23 @@ namespace RUIF
             Color line = color ?? Tokens.Alive;
             Color fill = Draw.WithAlpha(line, 0.18f);
             float stepX = plot.width / (values.Length - 1);
-            for (int i = 0; i < values.Length; i++)
+            const float sliceW = 3f;
+            for (int i = 0; i < values.Length - 1; i++)
             {
-                float y = ChartsFmt.Scale(values[i], 0f, hi, plot.yMax, plot.y);
-                float w = i == values.Length - 1 ? stepX : stepX + 1f;   // +1 消缝
-                Draw.Box(new Rect(plot.x + i * stepX, y, w, plot.yMax - y), fill);
+                float y0 = ChartsFmt.Scale(values[i], 0f, hi, plot.yMax, plot.y);
+                float y1 = ChartsFmt.Scale(values[i + 1], 0f, hi, plot.yMax, plot.y);
+                int slices = Mathf.Max(1, Mathf.CeilToInt(stepX / sliceW));
+                for (int s = 0; s < slices; s++)
+                {
+                    float t = (s + 0.5f) / slices;
+                    float y = y0 + (y1 - y0) * t;
+                    float sx = plot.x + (i + (float)s / slices) * stepX;
+                    float sw = Mathf.Min(sliceW + 0.5f, plot.xMax - sx);   // +0.5 消缝
+                    Draw.Box(new Rect(sx, y, sw, plot.yMax - y), fill);
+                }
             }
+            // 落地基线：填充底边一条 hair 线，给面积「落地」感（与折线同色系加深）
+            Draw.Box(new Rect(plot.x, plot.yMax - 1f, plot.width, 1f), Draw.WithAlpha(line, 0.35f));
             LineChart(plot, values, line, dots: false, grid: false);
         }
 
@@ -255,37 +397,56 @@ namespace RUIF
         /// 环形图：值数组按 <see cref="Tokens.Series"/> 上色，hole01=0 即饼图（见 <see cref="PieChart"/>）。
         /// 中心可选 KPI 文本。12 点钟方向起始，顺时针。
         /// </summary>
-        public static void DonutChart(Rect r, float[] values, float hole01 = 0.5f, string centerLabel = null)
+        /// <summary>
+        /// 环形图 —— **贴图扇区路线**（一次一个扇区，零矩阵旋转）。
+        ///
+        /// <para><b>为什么改掉「旋转拼环」</b>（2026-09-13）：旧实现用 <c>Draw.Rotate</c> 把每段按 3° 再切小段
+        /// （4 个值 ⇒ 约 <b>122 个嵌套 <c>RotateScope</c></b>），每帧 122 次 <c>GUI.matrix</c> 读写；
+        /// 而 <c>RotateScope</c> 的注释本身记载过同型事故（<c>Industrial.Gauge</c> 色块「飞满整屏」）。
+        /// 改成贴图扇区后：**每个值 1 次 <c>GUI.DrawTexture</c>**（4 个值 ⇒ 4 次），**零矩阵操作**，
+        /// 且形状由逐像素填充决定（边缘更干净、天然支持椭圆）。</para>
+        ///
+        /// <para><b>缓存键</b>：用 <see cref="TexCache.KeySector"/>（结构化键）—— 颜色序号 / 起角 / 张角 /
+        /// 孔洞比 / 边长 <b>五个判别量全部进键</b>，角度量化到 1°（环形图上肉眼不可见，但让动画也能命中缓存）。
+        /// <b>不再手拼位段</b>：2026-09-13 事故正是「算出孔洞比却传了常量」⇒ 饼图取到环图贴图、中间带孔。</para>
+        ///
+        /// <para>⚠ <b>约束</b>：调色板按 <see cref="Tokens.Series"/> 的 6 色**序号**编键 ⇒ 若切换主题改变了
+        /// 这 6 个色值，需 <c>TexCache.Clear()</c>。</para>
+        /// </summary>
+        public static void DonutChart(Rect r, float[] values, float hole01 = 0.5f, string centerLabel = null,
+            Color[] colors = null, float centerLabelY01 = 0.5f, bool centerLabelAlignToHole = false)
         {
             if (values == null || values.Length == 0) return;
             float total = 0f;
             for (int i = 0; i < values.Length; i++) if (values[i] > 0f) total += values[i];
             if (total <= 0f) return;
-            Vector2 c = r.center;
-            float outer = Mathf.Min(r.width, r.height) / 2f - 1f;
-            float holeR = Mathf.Max(0f, outer * Mathf.Clamp01(hole01));
-            float thick = Mathf.Max(2f, outer - holeR);
-            float ringMid = (outer + holeR) / 2f;
-            float start = -90f;
+
+            const int Size = 128;                                    // 扇区贴图边长：缓存后零成本
+            float hole = Mathf.Clamp01(hole01);
+            float start = -90f;                                       // 12 点起画（与原实现一致）
             for (int i = 0; i < values.Length; i++)
             {
                 float v = values[i];
                 if (v <= 0f) continue;
                 float sweep = ChartsFmt.SweepDeg(v, total);
-                int samples = Mathf.Max(2, Mathf.CeilToInt(sweep / 3f));   // 每 ~3° 一段
-                float stepAng = sweep / samples;
-                float arcLen = Mathf.Max(1.5f, ringMid * stepAng * Mathf.Deg2Rad + 0.5f);
-                for (int k = 0; k < samples; k++)
-                {
-                    float ang = start + (k + 0.5f) * stepAng;
-                    using (Draw.Rotate(ang, c))
-                        Draw.Box(new Rect(c.x + holeR, c.y - arcLen / 2f, thick, arcLen), Tokens.Series(i));
-                }
+                // 逐段语义色（可选）：colors 覆盖到的段用自己的颜色，未覆盖的回落 Series 色板。
+                Color segColor = colors != null && i < colors.Length ? colors[i] : Tokens.Series(i);
+                TexAtoms.Sector(r, TexCache.KeySector(segColor, start, sweep, hole, Size),
+                                start, sweep, hole, segColor, Size);
                 start += sweep;
             }
             if (!string.IsNullOrEmpty(centerLabel))
-                Draw.Label(new Rect(c.x - outer, c.y - 11f, outer * 2f, 22f),
+            {
+                float outer = Mathf.Min(r.width, r.height) / 2f - 1f;
+                // 中心文字纵向位置：默认取整环中心（0.5）；调用方可传更小值把数字上移，
+                // 以便在孔内画第二行小字（如「IN SERVICE」）。centerLabelAlignToHole =
+                // true 时按**孔径**（1−hole）居中，适配"厚环 + 窄孔"的排布。
+                float y01 = centerLabelAlignToHole ? hole + (1f - hole) * 0.5f : 0.5f;
+                if (centerLabelY01 > 0f) y01 = Mathf.Clamp01(centerLabelY01);
+                float labelY = r.y + r.height * y01 - 11f;
+                Draw.Label(new Rect(r.center.x - outer, labelY, outer * 2f, 22f),
                     centerLabel, Tokens.FontValue, Tokens.Text, TextAnchor.MiddleCenter);
+            }
         }
 
         /// <summary>饼图 = hole01=0 的环形图。</summary>
@@ -333,12 +494,45 @@ namespace RUIF
         private static Vector2 Pt(Rect r, int i, float v, float lo, float hi, float stepX)
             => new Vector2(r.x + i * stepX, ChartsFmt.Scale(v, lo, hi, r.yMax, r.y));
 
-        /// <summary>绘图区：底部留出标签条（有类目标签时）。</summary>
+        /// <summary>
+        /// 绘图区：底部留出标签条（有类目标签时）。
+        /// ⚠ 留出量必须是<b>标签字号的引擎行高</b>（原写死 14f）：预留带与 <see cref="BarChartV"/>
+        /// 里标签矩形的高度是同一件事的两个投影，各写一份就会重现"标签压柱"。
+        /// </summary>
+        /// <summary>
+        /// 绘图区（= 传入 rect 去掉**右侧刻度列**、**上下各半行刻度标签**，
+        /// 以及底部类目标签行）。调用方要在图外自画与柱/线逐列对齐的内容时，
+        /// 用 <see cref="PlotRectOf"/> 取同一个矩形。
+        /// </summary>
         private static Rect PlotArea(Rect r, bool labels)
-            => new Rect(r.x, r.y + 2f, r.width,
-                Mathf.Max(4f, r.height - (labels ? 14f : 0f)));
+            => new Rect(r.x, r.y + AxisLabelH * 0.5f,
+                Mathf.Max(4f, r.width - AxisLabelW),
+                Mathf.Max(4f, r.height - AxisLabelH
+                    - (labels ? Measure.RowHeight(Tokens.FontLabel) : 0f)));
 
-        /// <summary>横向 Nice 网格线 + 右上角刻度值（hair 线 / dim 标签）。</summary>
+        /// <summary>
+        /// 公开的绘图区取值（供调用方对齐自画的轴外内容）。
+        /// <para><b>为什么需要它</b>：本组件内部的柱/线几何、以及刻度标签都基于这个矩形，
+        /// 而它比传入 rect **窄一个 <see cref="AxisLabelW"/>、上下各内缩半行标签**
+        /// ⇒ 调用方若拿传入 rect 自己算列宽，会整体错开一个轴列宽
+        /// （2026-10-05 车间概览"天标签与柱错位"实证）。</para>
+        /// </summary>
+        /// <param name="bottomLabels">是否还要为"底部分类标签"预留一行（<c>BarChartV</c> 为 true）。</param>
+        public static Rect PlotRectOf(Rect r, bool bottomLabels = false) => PlotArea(r, bottomLabels);
+
+        /// <summary>
+        /// 横向 Nice 网格线 + **绘图区右侧外部**的刻度值（hair 线 / dim 标签）。
+        ///
+        /// <para>2026-10-05 修（玩家实机两轮反馈「纵坐标间隔太小 / 文本遮盖挤兑」）：原实现把标签
+        /// 画成 <c>Rect(plot.xMax - 34f, y - 12f, 34f, 12f)</c> + <c>UpperRight</c>，有两个硬缺陷：
+        /// ① <b>压数据</b>：标签右缘贴 <c>plot.xMax</c> 内侧 ⇒ 盖住最右一列柱 / 折线端点；
+        /// ② <b>越界</b>：最高刻度（<c>y == plot.y</c>）的标签是 <c>plot.y - 12 .. plot.y</c>
+        /// ⇒ 正好顶在绘图区上边界**之外**，会压进调用方的标题行。</para>
+        ///
+        /// <para>现改为：标签画在 <c>plot.xMax + 2</c> 起的**轴列**内、且以刻度线**垂直居中**
+        /// （<c>MiddleLeft</c>）⇒ 半行只在绘图区上/下各探出 6px，恰好落在
+        /// <see cref="PlotArea"/> 预留的半行内 ⇒ <b>标签恒在传入 rect 内，既不压数据也不越界</b>。</para>
+        /// </summary>
         private static void GridH(Rect plot, float hi)
         {
             int n = ChartsFmt.NiceTicks(0f, hi, tickBuf);
@@ -346,8 +540,8 @@ namespace RUIF
             {
                 float y = ChartsFmt.Scale(tickBuf[i], 0f, hi, plot.yMax, plot.y);
                 Draw.LineH(plot.x, y, plot.width, Tokens.BorderHair);
-                Draw.Label(new Rect(plot.xMax - 34f, y - 12f, 34f, 12f),
-                    tickBuf[i].ToString("0.#"), Tokens.FontLabel, Tokens.Dim, TextAnchor.UpperRight);
+                Draw.Label(new Rect(plot.xMax + 2f, y - AxisLabelH * 0.5f, AxisLabelW - 2f, AxisLabelH),
+                    tickBuf[i].ToString("0.#"), Tokens.FontLabel, Tokens.Dim, TextAnchor.MiddleLeft);
             }
         }
 

@@ -3,7 +3,7 @@
   <name>RUI Framework</name>
   <author>Personal Chronicle Team</author>
   <packageId>PersonalChronicle.RUIFramework</packageId>
-  <modVersion>v1.0.1</modVersion>
+  <modVersion>v1.3.0</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
@@ -11,10 +11,10 @@
 给 Mod 开发者的通用 UI 框架：即时模式 + 声明式布局助手，拿到就能画界面。
 
 · 一行上手　静态方法 + 一个矩形。无控件树、无隐藏状态、绘制路径零堆分配
-· 零件齐全　布局（Column / Row / Grid / Scroll）+ 固定设计令牌 + 153 件组件
-　　　　　　原子 42 · 输入 28 · 数据 40 · 导航 12 · 反馈 17 · 图表 10 · 工业 4
+· 零件齐全　布局（Column / Row / Grid / Scroll）+ 固定设计令牌 + 组件族 24（组件类 32 · 公开方法 176）
+　　　　　　语义件名（件名，非方法数）：原子 42 · 输入 28 · 数据 40 · 导航 12 · 反馈 17 · 图表 10 · 工业 4
 · 纯组件供应　不含主题 / 换肤 / 装饰层，也不内置演示界面——界面由你的 Mod 自己画
-· 零前置依赖　不引 Harmony，只依赖游戏本体；公开 API 73 类型 / 435 成员，SemVer 冻结
+· 零前置依赖　不引 Harmony，只依赖游戏本体；公开 API 115 类型，SemVer 冻结（逐类型签名见随包 DevDocs/API参考.md）
 · 中英双语　组件文案 60 键（Keyed），English + 简体中文随包，源码零硬编码
 · 离线文档随包　零基础上手教程 · API 参考 · 组件宝典 · 接入指南
 
@@ -24,10 +24,10 @@ RUIF · RimWorld UI Framework
 A general-purpose UI framework for RimWorld modders: immediate mode + declarative layout helpers, ready to draw with.
 
 - One-line drawing: a static method plus a rect. No control tree, no hidden state, zero heap allocation on the draw path
-- Complete parts kit: layout (Column / Row / Grid / Scroll) + fixed design tokens + 153 components
-  (42 atoms, 28 input, 40 data, 12 nav, 17 feedback, 10 charts, 4 industrial)
+- Complete parts kit: layout (Column / Row / Grid / Scroll) + fixed design tokens + 24 component families (32 component classes, 176 public methods)
+  (semantic item names, not method counts: 42 atoms, 28 input, 40 data, 12 nav, 17 feedback, 10 charts, 4 industrial)
 - Pure component supply: no theming, no reskinning, no decoration layer, no built-in demo UI - your mod draws everything
-- Zero prerequisites: no Harmony, game assemblies only; 73 public types / 435 members, SemVer-frozen
+- Zero prerequisites: no Harmony, game assemblies only; 115 public types, SemVer-frozen (per-type signatures in the bundled API reference)
 - Bilingual out of the box: 60 component keys (Keyed), English + Simplified Chinese, zero hardcoded text
 - Offline docs shipped: Quick Start tutorial, API reference, component bible, integration guide
 

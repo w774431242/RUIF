@@ -38,6 +38,16 @@ if (Test-Path $out) {
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
 # ---- 1) 对外文档白名单 ----
+# ⭐ docs/ 允许**分层**（2026-09-12 起按 01-设计草案 … 07-构建工具 分子目录）⇒
+#    一律按**文件名递归定位**，脚本与目录结构解耦（以后再挪目录不会再断发布链）。
+function Find-DocFile([string]$name) {
+    $hit = @(Get-ChildItem $docs -Recurse -File -Filter $name -ErrorAction SilentlyContinue |
+             Where-Object { $_.DirectoryName -notmatch '\\(obj|bin)($|\\)' } |
+             Sort-Object FullName | Select-Object -First 1)
+    if ($hit.Count -eq 0) { return $null }
+    return $hit[0].FullName
+}
+
 $whitelist = @(
     '零基础上手教程.html',
     'API参考.md',
@@ -49,20 +59,23 @@ $whitelist = @(
 # 体检报告按**模式**纳入全部历史报告（v2.1.1 起）：
 # 它们是"这个框架经历过哪些体检、结论与遗留项是什么"的可审计证据，外部开发者据此判断成熟度；
 # 用通配而非写死文件名，避免每出一份新报告就得改本脚本（v2.1.0 时就漏掉了新报告）。
-$whitelist += @(Get-ChildItem $docs -Filter '体检报告_*.md' -File | ForEach-Object { $_.Name })
+$whitelist += @(Get-ChildItem $docs -Recurse -File -Filter '体检报告_*.md' -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.Name })
 foreach ($f in $whitelist) {
-    $p = Join-Path $docs $f
-    if (-not (Test-Path $p)) { throw "对外文档缺失，无法生成开发者包: docs\$f" }
+    $p = Find-DocFile $f
+    if (-not $p) { throw "对外文档缺失，无法生成开发者包: docs\<任意层>\$f" }
     Copy-Item $p $out -Force
 }
-Copy-Item (Join-Path $docs '开发者入口.html') (Join-Path $out 'index.html') -Force
+$entry = Find-DocFile '开发者入口.html'
+if (-not $entry) { throw '对外文档缺失: docs\<任意层>\开发者入口.html' }
+Copy-Item $entry (Join-Path $out 'index.html') -Force
 
 # ---- 2) BUILD-INFO（供门禁断言版本一致） ----
 $info = @(
     'RUIF DevDocs（对外开发者包）',
     "version: $version",
     "generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
-    'source: RUIF/docs/*（白名单）',
+    'source: RUIF/docs/**（白名单，按文件名递归定位）',
     '入口: index.html'
 ) -join "`r`n"
 [IO.File]::WriteAllText((Join-Path $out 'BUILD-INFO.txt'), $info, (New-Object Text.UTF8Encoding($false)))

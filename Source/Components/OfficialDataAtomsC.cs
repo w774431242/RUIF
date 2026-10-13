@@ -38,9 +38,16 @@ namespace RUIF
             for (int i = 0; i < members.Length; i++)
             {
                 string initial = string.IsNullOrEmpty(members[i]) ? "?" : members[i].Substring(0, 1);
-                Draw.Box(av.Take(22f), Tokens.Accent);
-                Draw.Label(av.Rest, string.Empty, Tokens.FontLabel, Tokens.Muted, TextAnchor.MiddleLeft);
-                Draw.Label(av.Take(22f), initial, Tokens.FontLabel, Tokens.Window, TextAnchor.MiddleCenter);
+                // ⚠ 修复（2026-10-05 实机取证）：原实现是
+                //      Draw.Box(av.Take(22f), Accent);              → 底色块 [x, x+22)
+                //      Draw.Label(av.Rest, string.Empty, …);         → 空标签（游标不推进，纯空转）
+                //      Draw.Label(av.Take(22f), initial, …);         → 首字落到 [x+26, x+48)
+                //   第二次 Take 落在底色块**右侧 4px 的空地**上 ⇒ 蓝方块里没有字、
+                //   字被画到方块旁边的空白处（截图里三个「纯蓝方块」即此）。
+                //   头像块必须**一次取值、底色与首字共用同一 rect**。
+                Rect chip = av.Take(22f);
+                Draw.Box(chip, Tokens.Accent);
+                Draw.Label(chip, initial, Tokens.FontLabel, Tokens.Window, TextAnchor.MiddleCenter);
             }
             var load = Layout.Row(col.Take(16f), 6f);
             Draw.Label(load.Take(56f), Tr.Get("RUIF.Comp.Caravan.Load"), Tokens.FontLabel, Tokens.Muted, TextAnchor.MiddleLeft);
@@ -65,7 +72,10 @@ namespace RUIF
                 Draw.Border(chip, c);
                 Draw.Box(new Rect(chip.x, chip.y, 3f, chip.height), c);
                 string s = (genes[i] ?? string.Empty) + " " + OfficialFmt.ComplexityLabel(complexity[i]);
-                Draw.Label(new Rect(chip.x + 8f, chip.y, chip.width - 10f, chip.height), s, Tokens.FontLabel, c, TextAnchor.MiddleLeft);
+                // 文字用 Tokens.Text（近白）而不是语义色 c：底色是 c 的 14% 叠印，
+                // 同色系叠同色系时负向芯片（Dead 红底 + 红字）在实机上几乎读不出来。
+                // 语义仍由**左边条 + 边框 + 底色**三处承载，不依赖字色。
+                Draw.Label(new Rect(chip.x + 8f, chip.y, chip.width - 10f, chip.height), s, Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleLeft);
             }
         }
 

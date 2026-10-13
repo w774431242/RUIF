@@ -24,7 +24,7 @@ namespace RUIF
         /// 若版本靠在 Mod 构造器里赋值，消费 Mod 在自构造期探测就会随机拿到 0.0.0，
         /// 得到「框架已装却报不可用」的假阴性（间歇性、与 loadOrder 无关）。
         /// </summary>
-        public const string VersionString = "1.0.1";
+        public const string VersionString = "1.3.0";
 
         private static readonly Version version = ParseVersion(VersionString);
 

@@ -1,7 +1,8 @@
 # RUIF — RimWorld UI Framework（独立 UI 框架 Mod）
 
-> 状态：**纯组件库**（只提供可复用 UI 组件与固定设计令牌；**不含主题 / 换肤机制**），含 `Assemblies/` · `Languages/` · `DevDocs/`，发布区 `Mods\RUIF`
+> 状态：**纯组件库**（只提供可复用 UI 组件与固定设计令牌；**不含主题 / 换肤机制**），含 `Assemblies/` · `Languages/`；文档体系见 `docs/`，对外包 `DevDocs/` 由 `sync_devdocs.ps1` 发布前生成，发布区 `Mods\RUIF`
 > 更新：2026-09-12（**移除主题 / 换肤层及其全部公共 API**，框架回归纯组件供应）
+> 仓库位置（2026-09-12 起）：**`E:\SteamLibrary\steamapps\common\RimWorld\11\RUIF`** —— 独立根，与 `PersonalChronicle` 平级（原为其子目录）。`_scripts/` 全部以 `$PSScriptRoot` 推导根，**位置无关**。详见 `docs/健康评估与发布记录.md` §13。
 
 ## 1. 定位
 
@@ -16,9 +17,9 @@
 
 | 维度 | 实测值 |
 |---|---|
-| 版本 | `Api.VersionString` ↔ `About/About.xml` modVersion（当前 **v1.0.1**，2026-09-12；变更全部记入 `CHANGELOG.md`） |
+| 版本 | `Api.VersionString` ↔ `About/About.xml` modVersion（当前 **v1.2.0**，2026-09-16；变更全部记入 `CHANGELOG.md`） |
 | 编译 | `dotnet build Source/RUIF.csproj -c Release` → **0 错 0 警** |
-| 单测 | `dotnet test Tests/RUIF.Tests.csproj -c Release` → **171/171** |
+| 单测 | `dotnet test Tests/RUIF.Tests.csproj -c Release` → **197/197** |
 | 组件 | 原子 42 · 输入 28 · 数据 40 · 导航 12 · 反馈 17 · 图表 10 · 工业 4 |
 | 设计令牌 | `RUIF.Tokens`：16 色 + 间距 + 字号 + 尺寸，**编译期常量 / 只读静态值，运行期不可变** |
 | 主题 / 换肤 | **无**（已移除 `Theme` 引擎、`ThemePresets`、`ThemeDecor`、`DrawDecor`、`ThemeMotion`、`VanillaUiSkin`、`RUIFSettings`） |
@@ -26,7 +27,7 @@
 | 绘制路径翻译 | `Core/Tr.cs` → 有界缓存 `Core/TrCache.cs`：命中即零字典查找 / 零分配，语言切换自动失效（容量 512） |
 | 程序集引用 | 仅 `mscorlib` / `System.Core` / `Assembly-CSharp` / `UnityEngine.{Core,IMGUI,TextRendering}Module` —— **不含 0Harmony** |
 | 运行时副作用 | **无 Def 界面入口** · 无存档字段 · 组件无持久状态 |
-| 公共 API | 见 `DevDocs/API参考.md`（**生成物，需在下次发布前重新跑生成器**） |
+| 公共 API | 见 `docs/03-API与引擎取证/API参考.md`（**生成物，需在下次发布前重新跑生成器**） |
 
 ## 3. 分层与目录
 
@@ -37,10 +38,10 @@ RUIF/
 ├── Languages/                       English · ChineseSimplified（Keyed）
 ├── Source/
 │   ├── Core/                        L0 Draw 作用域 / Api（版本门面）/ Tokens（设计令牌）/ Tr + TrCache
-│   ├── Layout/                      L4 VStack · HStack · Grid · Scroll + Atoms
+│   ├── Layout/                      L1 VStack · HStack · Grid · Scroll + Atoms
 │   └── Components/                  L2/L3 原子与复合组件
 ├── Tests/                           NUnit 单测（net48）
-├── DevDocs/                         【生成】对外开发者包（随包分发）
+├── DevDocs/                         【生成】对外开发者包（发布前 `sync_devdocs.ps1` 生成，不进主树维护）
 ├── _archive/                        【归档·不编译】v1.x 组件演示源码（不随包发布）
 ├── _scripts/                        见 §5
 └── docs/                            见 §4
@@ -50,16 +51,13 @@ RUIF/
 
 | 文档 | 内容 |
 |---|---|
-| `docs/零基础上手教程.html` | **第三方开发者向零基础教程**（30 分钟：接依赖 → 第一个窗口 → 组件配方表 → 六个坑 → 报错对照表；示例对发布区 `RUIF.dll` 真编译） |
-| `docs/开发者入口.html` | **对外唯一入口**（随包分发为 `DevDocs/index.html`）：30 秒定位 → 依赖两模式 → 5 分钟上手 → 文档地图 → 常见坑 |
-| `docs/API参考.md` | **自动生成**的对外 API 全量清单；生成器 `_scripts/gen_api_reference.ps1`（**主题相关条目需在移除后重新生成**） |
-| `docs/终极宝典v1.0-fixed.html` | 全量实例与布局配方（随包分发） |
-| `docs/接入指南与引擎可行性审计.html` | 接入流程 + **依赖语义与降级矩阵** + 引擎三级可行性审计（✅原生 / ⚠️有代价 / ❌不承诺） |
-| `docs/健康评估与发布记录.md` | GATE 判定、例外登记（EXC）、NOT RUN 清单、发布记录 |
-| `docs/体检报告_*.md` | 历次体检报告（**历史记录**，其中 v2.2.x 篇描述的是已移除的主题 / 装饰层） |
-| `docs/CHANGELOG.md` | 逐版本变更与 Gate 摘要（SemVer 口径） |
-| `docs/组件库全量目录.md` | 组件分类索引（按用途分类，含 📋 待落地；**视觉参考见 `终极宝典v1.0-fixed.html`**） |
-| `docs/底层UI框架方案.html` · `原版UI代码标准（Spy取证）.md` · `API签名核实清单.md` | 设计底稿与反编译实证 |
+| `docs/02-组件图鉴/标准规范组件预览.html` | **标准组件预览**（145 张卡：真实用法 / 逐行注释 / API 标红 / 中文名 / 推荐尺寸 / 复制按钮） |
+| `docs/03-API与引擎取证/API参考.md` | **傻瓜化真实接口文档**：自动生成的对外 API 全量清单；生成器 `_scripts/gen_api_reference.ps1`（改代码后必跑，与实现同步） |
+| `docs/04-开发者手册/零基础上手教程.html` | **零基础上手教程**（30 分钟：接依赖 → 第一个窗口 → 组件配方表 → 六个坑 → 报错对照表） |
+| `docs/02-组件图鉴/组件库全量目录.md` | 组件落地状态清单（✅/📋/⛔） |
+| `docs/06-发布记录/CHANGELOG.md` | 逐版本变更与 Gate 摘要（SemVer 口径） |
+
+> 文档体系已精简为**三支柱**（预览 / API 参考 / 零基础教程），详见 `docs/00-文档导航.md`。对外开发者包 `DevDocs/` 由 `docs/` 单一真源 + `sync_devdocs.ps1` 生成，**不在主树维护**；发布前重跑生成器即重建。
 
 ## 5. 脚本（`_scripts/`）
 
@@ -107,5 +105,5 @@ Draw.Label(rect, text, Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleLeft);
 - ⚠️ 简化件：`CommandPalette` 全局 Ctrl+K 焦点仲裁 · `MultiLineEditor` 真多行编辑 · `ScrollFadeHint`/`OverflowFade` 真 alpha 遮罩 · `HotkeyBind` 键位捕获（均留后续版本）。
 - ⚠️ 带参译文里 **float/string 参数**未走缓存（int 参数已走）：缓存键需拼接参数，与省下的格式化分配净收益相当，故不做 —— 见 `TrCache` 注释与体检报告性能结论。
 - ⚠️ `_scripts/gen_preview.py` 与 `health_check.ps1` 仍含主题 / 装饰相关逻辑，待同步清理。
-- ⚠️ `docs/` 与 `DevDocs/` 中部分**历史报告与宝典历史章节**（体检报告 v2.2.x、宝典的 12 套风格色块章节等）仍描述已移除的主题 / 装饰层，作为历史记录保留。
-- 未发布到 Workshop / GitHub；无公开版本标签。本地发布包：`…\RimWorld\Mods\RUIF`（框架，19 文件），由 `sync_ruif.ps1` 同步并经 `verify_release.ps1` 十道门禁校验。
+- ⚠️ 已移除 `docs/` / `DevDocs/` 中描述已移除主题 / 装饰层的历史报告与宝典历史章节（体检报告 v2.2.x、宝典 12 套风格色块等）；文档体系已精简为三支柱（预览 / API参考 / 零基础教程），见 `docs/00-文档导航.md`。
+- 未发布到 Workshop / GitHub；无公开版本标签。本地发布包：`…\RimWorld\Mods\RUIF`（框架，21 文件），由 `sync_ruif.ps1` 同步并经 `verify_release.ps1` 九道门禁校验。

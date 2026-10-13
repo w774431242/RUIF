@@ -79,4 +79,13 @@
   <RUIF.Comp.Relative.Minutes>{0} 分</RUIF.Comp.Relative.Minutes>
   <RUIF.Comp.Relative.Hours>{0} 时</RUIF.Comp.Relative.Hours>
   <RUIF.Comp.Relative.Days>{0} 天</RUIF.Comp.Relative.Days>
+
+  <!-- 互动组件族（1.3.0）。域：Button = 按钮族，Window = WindowFrame 骨架。
+       纪律（方案 §5.8）：组件内不内置英文默认串 ⇒ 用户可见文案一律走 Keyed 管道。已核实的活跃调用点：
+         RUIF.Comp.Button.Disabled → 禁用态**悬停提示**（ButtonAtoms.cs:267 / :300 / :338、InputAtoms.cs:557）；
+           **不是** label==null 回退：ButtonAtoms 对 null 标签只画「label ?? string.Empty」空串。
+         RUIF.Comp.Window.Close   → WindowFmt.DefaultCloseLabel(label)（WindowFrame.cs:223）：
+           调用方传 label == null 时的 n==1 单按钮默认文案。 -->
+  <RUIF.Comp.Button.Disabled>不可用</RUIF.Comp.Button.Disabled>
+  <RUIF.Comp.Window.Close>关闭</RUIF.Comp.Window.Close>
 </LanguageData>

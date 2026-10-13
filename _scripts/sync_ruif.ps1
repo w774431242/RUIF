@@ -33,7 +33,13 @@ $targets = @(
     @{ Name = 'RUIF'; Src = $ruifRoot; Dst = (Join-Path $modsRoot 'RUIF');
        Dirs = @('About', 'Assemblies', 'Defs', 'Languages', 'Textures', 'Patches', 'DevDocs');
        Cache = @('obj', 'bin')
-       Keep  = @('About\PublishedFileId.txt') }
+       Keep  = @('About\PublishedFileId.txt') },
+    # 开发用组件验证台（不随框架发布）：源码在 _demo\RUIF_Demo，只同步游戏需要的三个目录，
+    # Source\ 留在开发区（发布区不带源码，也就不会被镜像清理误删）。
+    @{ Name = 'RUIF_Demo'; Src = (Join-Path $ruifRoot '_demo\RUIF_Demo'); Dst = (Join-Path $modsRoot 'RUIF_Demo');
+       Dirs = @('About', 'Assemblies', 'Defs');
+       Cache = @('obj', 'bin')
+       Keep  = @() }
 )
 
 $dllResults = @()

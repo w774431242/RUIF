@@ -1,0 +1,126 @@
+Assembly            : E:\SteamLibrary\steamapps\common\RimWorld\11\RUIF\Assemblies\RUIF.dll
+AssemblyFileTimeUtc : 2026-09-16 05:56:56Z
+PublicTypes         : 114
+ALLTypesInclNested  : 135
+PublicFields        : 110
+PublicProperties    : 20
+PublicMethods       : 432
+EnumValues          : 54
+PublicMembers(gen口径=field+prop+method+enumval) : 616
+PublicMembers(不含enum值)                       : 562
+
+--- 类型清单（FullName | Kind | 公开方法数）---
+RUIF.AlertPriority	enum	4
+RUIF.Anchor9	enum	9
+RUIF.Api	static class	1
+RUIF.Atoms	static class	3
+RUIF.ChartCandAtoms	static class	13
+RUIF.ChartCandAtoms.BoxStats	struct	0
+RUIF.ChartCandAtoms.BubblePt	struct	0
+RUIF.ChartCandAtoms.GanttBar	struct	0
+RUIF.ChartCandAtoms.OhlcBar	struct	0
+RUIF.ChartCandAtoms.RangePt	struct	0
+RUIF.ChartCandAtoms.SankeyLink	struct	0
+RUIF.ChartCandAtoms.SankeyNode	struct	0
+RUIF.ChartCandAtoms.WaterfallStep	struct	0
+RUIF.ChartCandFmt	static class	5
+RUIF.Charts	static class	11
+RUIF.ChartsFmt	static class	8
+RUIF.Command	class	0
+RUIF.CommandPalette	static class	2
+RUIF.DataAtoms	static class	9
+RUIF.DataCandAtoms	static class	6
+RUIF.DataCandAtoms.BillEntry	struct	0
+RUIF.DataCandAtoms.FilterNode	struct	0
+RUIF.DataCandAtoms.TradeRow	struct	0
+RUIF.DataCandFmt	static class	4
+RUIF.DataExAtoms	static class	12
+RUIF.DataExFmt	static class	13
+RUIF.DataFmt	static class	5
+RUIF.DomainCandAtoms	static class	4
+RUIF.DomainCandAtoms.BridgeSnapshot	struct	0
+RUIF.DomainCandAtoms.CircuitNode	struct	0
+RUIF.DomainCandAtoms.ProductionStage	struct	0
+RUIF.DomainCandFmt	static class	3
+RUIF.Draw	static class	14
+RUIF.Draw.AnchorScope	struct	1
+RUIF.Draw.ColorScope	struct	1
+RUIF.Draw.EnabledScope	struct	1
+RUIF.Draw.FontScope	struct	1
+RUIF.Draw.RotateScope	struct	1
+RUIF.FeedbackAtoms	static class	6
+RUIF.FeedbackAtomsB	static class	9
+RUIF.FeedbackCandAtoms	static class	2
+RUIF.FeedbackCandAtoms.AlertEntry	struct	0
+RUIF.FeedbackCandFmt	static class	2
+RUIF.FeedbackFmt	static class	6
+RUIF.Grid	struct	1
+RUIF.HiAtoms	static class	2
+RUIF.HStack	struct	1
+RUIF.Industrial	static class	8
+RUIF.IndustrialFmt	static class	7
+RUIF.InputAtoms	static class	8
+RUIF.InputCandAtoms	static class	3
+RUIF.InputCandAtoms.SliderCfg	struct	0
+RUIF.InputCandFmt	static class	3
+RUIF.InputExAtoms	static class	9
+RUIF.InputExFmt	static class	9
+RUIF.InputFmt	static class	7
+RUIF.InputPlusAtoms	static class	12
+RUIF.InputPlusFmt	static class	15
+RUIF.InputState	enum	6
+RUIF.InteractAtoms	static class	4
+RUIF.InteractFmt	static class	3
+RUIF.Layout	static class	7
+RUIF.LayoutCandAtoms	static class	1
+RUIF.MachineState	enum	5
+RUIF.Measure	static class	6
+RUIF.MiscAtoms	static class	3
+RUIF.MiscFmt	static class	5
+RUIF.NavAction	enum	3
+RUIF.NavAtoms	static class	5
+RUIF.NavAtomsB	static class	6
+RUIF.NavAtomsB.NavStack	class	5
+RUIF.NavAtomsB.RecentEntry	struct	0
+RUIF.NavCandAtoms	static class	5
+RUIF.NavCandFmt	static class	5
+RUIF.NavFmt	static class	10
+RUIF.OfficialDataAtoms	static class	4
+RUIF.OfficialDataAtomsB	static class	5
+RUIF.OfficialDataAtomsC	static class	5
+RUIF.OfficialFmt	static class	9
+RUIF.PanelAtoms	static class	4
+RUIF.PanelFmt	static class	2
+RUIF.PawnTableAtoms	static class	3
+RUIF.PawnTableHost	class	3
+RUIF.ProgressAtoms	static class	4
+RUIF.ProgressFmt	static class	6
+RUIF.Px	static class	7
+RUIF.QuickAmountKind	enum	4
+RUIF.RelationBand	enum	5
+RUIF.ReorderAtoms	static class	2
+RUIF.ReorderFmt	static class	4
+RUIF.ReorderRowDrawer	class	3
+RUIF.RichSpan	struct	0
+RUIF.RowDensity	enum	3
+RUIF.Shapes	static class	5
+RUIF.ShapesFmt	static class	4
+RUIF.SortState	enum	3
+RUIF.StatusAtoms	static class	7
+RUIF.StatusFmt	static class	4
+RUIF.StatusKind	enum	5
+RUIF.TableAtoms	static class	5
+RUIF.TableCandAtoms	static class	1
+RUIF.TableFmt	static class	7
+RUIF.TexAtoms	static class	6
+RUIF.TexCache	static class	8
+RUIF.TexFmt	static class	14
+RUIF.TextAtoms	static class	5
+RUIF.TextFmt	static class	2
+RUIF.TimeBucket	enum	4
+RUIF.ToastLevel	enum	3
+RUIF.Tokens	static class	1
+RUIF.TreeNode	class	1
+RUIF.VisualAtoms	static class	4
+RUIF.VisualsFmt	static class	3
+RUIF.VStack	struct	1

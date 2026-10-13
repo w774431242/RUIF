@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RUIF 零基础上手教程（第三方开发者向）</title>
+<style>
+:root{--bg:#0c111d;--panel:#121829;--panel2:#161d33;--card:#172036;--border:#2c3450;
+--border-soft:#222a44;--text:#e8e3d8;--muted:#9a93a0;--accent:#d4af37;--info:#dab457;
+--alive:#75c57f;--dead:#c04732;--warn:#d29922;--code:#0a0e18}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.7 "Segoe UI",system-ui,"Microsoft YaHei",sans-serif}
+header{padding:26px 32px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#101728,#0c111d)}
+header h1{margin:0;font-size:21px;letter-spacing:.5px}
+header p{margin:6px 0 0;color:var(--muted);font-size:13px}
+nav{position:sticky;top:0;z-index:10;background:rgba(12,17,29,.93);backdrop-filter:blur(6px);
+border-bottom:1px solid var(--border);padding:10px 32px;display:flex;flex-wrap:wrap;gap:8px}
+nav a{color:var(--muted);text-decoration:none;font-size:12.5px;padding:4px 10px;border:1px solid var(--border-soft);border-radius:14px}
+nav a:hover{color:var(--accent);border-color:var(--accent)}
+main{max-width:1040px;margin:0 auto;padding:22px 32px 70px}
+section{margin:32px 0}
+h2{font-size:17px;color:var(--accent);border-left:3px solid var(--accent);padding-left:10px;margin-top:0}
+h3{font-size:14px;color:var(--info);margin:20px 0 6px}
+p,li{font-size:13.5px;color:#cfc9bd}
+code{background:var(--code);color:#e6d9a8;padding:1px 6px;border-radius:4px;font-family:Consolas,monospace;font-size:12.5px}
+pre{background:var(--code);border:1px solid var(--border);border-radius:8px;padding:13px 15px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0;color:#d7d2c4}
+.cm{color:#6A9955}.kw{color:#C586C0}.st{color:#CE9178}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12.8px}
+th,td{border:1px solid var(--border-soft);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--info);font-weight:600}
+tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+.callout{border:1px solid var(--border);border-left:3px solid var(--alive);background:rgba(117,197,127,.06);padding:12px 16px;border-radius:6px;margin:14px 0}
+.warnbox{border:1px solid var(--border);border-left:3px solid var(--warn);background:rgba(210,153,34,.08);padding:12px 16px;border-radius:6px;margin:14px 0}
+.danger{border:1px solid var(--border);border-left:3px solid var(--dead);background:rgba(192,71,50,.08);padding:12px 16px;border-radius:6px;margin:14px 0}
+.mut{color:var(--muted);font-size:12px}
+ol.steps{counter-reset:s;list-style:none;padding-left:0}
+ol.steps>li{counter-increment:s;position:relative;padding-left:34px;margin:10px 0}
+ol.steps>li::before{content:"第 " counter(s) " 步";position:absolute;left:0;top:2px;font-size:11px;color:var(--accent);
+border:1px solid var(--border-soft);border-radius:10px;padding:1px 6px;white-space:nowrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>RUIF 零基础上手教程</h1>
+  <p>面向<b>没写过 RimWorld 界面</b>的 Mod 开发者：从空工程到画出自己的窗口，<b>全程复制粘贴即可跑</b>。
+  <span class="mut">本页所有代码已在 <b>v1.1.0</b> 随包 <code>RUIF.dll</code> 上真编译验证（0 错 0 警）——你抄下来就能过编译。</span></p>
+</header>
+<nav>
+  <a href="#how">怎么用这份教程</a>
+  <a href="#what">① 三个概念</a>
+  <a href="#install">② 五分钟接上</a>
+  <a href="#first">③ 画第一个窗口</a>
+  <a href="#layout">④ 布局速成</a>
+  <a href="#recipes">⑤ 组件配方表</a>
+  <a href="#pit">⑥ 六个必踩的坑</a>
+  <a href="#loc">⑦ 本地化</a>
+  <a href="#errors">⑧ 报错对照表</a>
+  <a href="#map">⑨ 该看哪份文档</a>
+  <a href="#full">⑩ 完整示例源码</a>
+</nav>
+<main>
+
+<section id="how">
+  <h2>怎么用这份教程</h2>
+  <p>你不需要读完全文。<b>按下面顺序做，30 分钟内你就能在自己的 Mod 里画出一个窗口</b>：</p>
+  <table>
+    <tr><th>你在什么时候看</th><th>看哪一节</th><th>花多久</th></tr>
+    <tr><td>刚听说 RUIF，想知道值不值得用</td><td><a href="#what">① 三个概念</a> + <a href="#recipes">⑤ 组件配方表</a></td><td>3 分钟</td></tr>
+    <tr><td>决定用了，要把它接进工程</td><td><a href="#install">② 五分钟接上</a></td><td>5 分钟</td></tr>
+    <tr><td>要画第一个窗口</td><td><a href="#first">③ 画第一个窗口</a> + <a href="#layout">④ 布局速成</a></td><td>10 分钟</td></tr>
+    <tr><td>画到一半发现某块画不出来</td><td><a href="#recipes">⑤ 组件配方表</a>（按"想做什么"查）</td><td>随时</td></tr>
+    <tr><td>编译报错 / 颜色/字体怪怪的</td><td><a href="#pit">⑥ 六个必踩的坑</a> + <a href="#errors">⑧ 报错对照表</a></td><td>随时</td></tr>
+  </table>
+  <div class="callout"><b>一句话定位：</b>RUIF 是<b>“画 UI 的零件箱”</b>——它给你按钮条、状态点、图表、表格、选项卡、对话框等零件，
+  以及一套固定的颜色/间距/字号令牌；<b>它不给你现成界面</b>，你的界面由你自己用这些零件拼出来。</div>
+</section>
+
+<section id="what">
+  <h2>① 三个概念（30 秒）</h2>
+
+  <h3>概念 1 · RUIF 是“框架 Mod”，你只引用、不内嵌</h3>
+  <p>和 Harmony / HugsLib 一个模式：玩家订阅 <b>RUIF 这个 Mod</b>，游戏启动时全游戏只加载<b>一份</b> <code>RUIF.dll</code>。
+  你的 Mod 只在编译期引用它（<code>Private=false</code>），<b>绝不把 dll 复制进自己包里</b>——否则会出现"两份不同版本 dll"的经典冲突。</p>
+
+  <h3>概念 2 · 组件 = 静态方法 + 一个矩形（Rect）</h3>
+  <p>RUIF 里没有“控件对象”，没有属性页，也不需要 new。你要画什么，就调一个静态方法，告诉它<b>画在哪块矩形里</b>：</p>
+  <pre><code>RUIF.Draw.Label(rect, <span class="st">"人口 7"</span>, RUIF.Tokens.FontBody, RUIF.Tokens.Text, TextAnchor.MiddleLeft);
+<span class="cm">//  ↑ 画在哪      ↑ 画什么   ↑ 字号令牌         ↑ 颜色令牌       ↑ 对齐</span></code></pre>
+  <p>所以每个组件都长得一样：<code>类型.方法(rect, 数据…)</code>。会画一个，就会画一百个。</p>
+
+  <h3>概念 3 · 布局 = 一个“游标”，一路切过去</h3>
+  <p>你不需要算坐标。要一列三行，就拿一根纵向游标，从上往下切三刀：</p>
+  <pre><code><span class="kw">var</span> col = RUIF.Layout.Column(inRect, RUIF.Tokens.Gap);   <span class="cm">// 竖着切</span>
+Rect head = col.Take(30f);    <span class="cm">// 第 1 行：高 30</span>
+Rect body = col.Take(120f);   <span class="cm">// 第 2 行：高 120</span>
+Rect foot = col.Rest;         <span class="cm">// 剩下的全给它</span></code></pre>
+  <p><b>口诀：先拿游标 → 再切格子 → 最后往格子里画。</b>横着切就换 <code>Layout.Row</code>（切宽度）。</p>
+
+  <div class="warnbox"><b>诚实提醒：</b>RUIF 是<b>即时模式</b>（每帧重画一次，和原版 IMGUI 一致）。你要写一个 <code>Window</code> 子类、
+  实现 <code>DoWindowContents(Rect)</code>——这部分是原版知识，本教程会给你完整模板，照抄即可。想深入看原版机制，见
+  《接入指南与引擎可行性审计.html》。</div>
+</section>
+
+<section id="install">
+  <h2>② 五分钟接上（两种模式，选一个）</h2>
+
+  <h3>模式 A · 硬依赖（推荐：99% 的场合都用这个）</h3>
+  <p>适用：你的 Mod <b>必须有</b> RUIF 才能用（没装就没意义）。</p>
+  <ol class="steps">
+    <li><b>csproj 里加引用</b>（路径按你的工程改）：<code>&lt;Private&gt;false&lt;/Private&gt;</code> 是重点——<b>不要</b>把 dll 复制进你的包。</li>
+    <li><b>About.xml 声明依赖</b>，让游戏保证加载顺序。</li>
+    <li><b>代码里做版本门控</b>（可选但推荐）：<code>Api.IsAvailable("1.0")</code> 确认框架在位。</li>
+  </ol>
+  <pre><code><span class="cm">&lt;!-- 第 1 步：你的 Mod .csproj --&gt;</span>
+&lt;ItemGroup&gt;
+  &lt;Reference Include=<span class="st">"RUIF"</span>&gt;
+    &lt;HintPath&gt;<span class="st">$(RimWorldPath)\Mods\RUIF\Assemblies\RUIF.dll</span>&lt;/HintPath&gt;
+    &lt;Private&gt;<span class="kw">false</span>&lt;/Private&gt;   <span class="cm">&lt;!-- 关键：不要随包分发 --&gt;</span>
+  &lt;/Reference&gt;
+&lt;/ItemGroup&gt;</code></pre>
+  <pre><code><span class="cm">&lt;!-- 第 2 步：你的 About.xml --&gt;</span>
+&lt;modDependencies&gt;
+  &lt;li&gt;
+    &lt;packageId&gt;<span class="st">PersonalChronicle.RUIFramework</span>&lt;/packageId&gt;
+    &lt;displayName&gt;<span class="st">RUI Framework (RUIF)</span>&lt;/displayName&gt;
+  &lt;/li&gt;
+&lt;/modDependencies&gt;
+&lt;loadAfter&gt;&lt;li&gt;<span class="st">PersonalChronicle.RUIFramework</span>&lt;/li&gt;&lt;/loadAfter&gt;</code></pre>
+  <pre><code><span class="cm">// 第 3 步：版本门控（放在你窗口的构造器或 Mod 构造器里）</span>
+<span class="kw">using</span> RUIF;
+<span class="kw">if</span> (!Api.IsAvailable(<span class="st">"1.0"</span>)) { <span class="cm">/* 框架太旧／缺失 → 给出提示并禁用入口 */</span> }</code></pre>
+
+  <h3>模式 B · 软依赖（可选：想让玩家不装 RUIF 也能用你的 Mod）</h3>
+  <p>关键点只有一个：<b>“探测”和“调用”要分开</b>。探测用反射扫类型名（不引用 RUIF 类型，框架缺失也不会炸）；
+  真正调用 RUIF 的代码全部关进独立方法里。</p>
+  <pre><code><span class="kw">internal static class</span> RuifProbe
+{
+    <span class="kw">private static bool</span>? cached;
+    <span class="kw">internal static bool</span> Available
+    {
+        <span class="kw">get</span>
+        {
+            <span class="kw">if</span> (!cached.HasValue) cached = FindApiType() != <span class="kw">null</span>;
+            <span class="kw">return</span> cached.Value;
+        }
+    }
+    <span class="cm">// 只扫类型名字符串，不引用 RUIF 类型 —— 框架没装也不会抛</span>
+    <span class="kw">private static</span> Type FindApiType()
+    {
+        <span class="kw">foreach</span> (System.Reflection.Assembly asm <span class="kw">in</span> AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type t = asm.GetType(<span class="st">"RUIF.Api"</span>, <span class="kw">false</span>);
+            <span class="kw">if</span> (t != <span class="kw">null</span>) <span class="kw">return</span> t;
+        }
+        <span class="kw">return null</span>;
+    }
+}
+
+<span class="kw">internal static class</span> RuifBridge
+{
+    <span class="cm">// 所有会触发 RUIF 类型加载的调用都关在这里</span>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    <span class="kw">internal static bool</span> HasApi(<span class="kw">string</span> minVersion)
+    {
+        <span class="kw">return</span> Api.IsAvailable(minVersion);
+    }
+}</code></pre>
+  <div class="danger"><b>为什么必须这样写？</b>RUIF 类型在框架缺失时，任何引用它的代码路径会在 <b>JIT 期</b>抛
+  <code>FileNotFoundException</code>／<code>TypeLoadException</code>——<b>不会</b>走到你精心准备的 <code>else</code> 分支。
+  这是 C# 的运行期行为，不是 RUIF 的脾气。</div>
+</section>
+
+<section id="first">
+  <h2>③ 画第一个窗口（完整代码，可直接跑）</h2>
+  <p>把下面整段贴进你的工程，就是一个能开的窗口。逐行注释在右边。</p>
+  <pre><code><span class="kw">using</span> RUIF;
+<span class="kw">using</span> UnityEngine;
+<span class="kw">using</span> Verse;
+
+<span class="kw">public class</span> Dialog_MyFirstWindow : Window
+{
+    <span class="kw">public override</span> Vector2 InitialSize =&gt; <span class="kw">new</span> Vector2(560f, 320f);   <span class="cm">// 窗口初始大小</span>
+
+    <span class="kw">public override void</span> DoWindowContents(Rect inRect)
+    {
+        <span class="cm">// 1) 竖着切三行：标题 / 内容 / 按钮</span>
+        <span class="kw">var</span> col = Layout.Column(inRect, Tokens.Gap);
+        Rect head = col.Take(30f);
+        Rect body = col.Take(200f);
+        Rect foot = col.Rest;
+
+        <span class="cm">// 2) 标题</span>
+        Draw.Label(head, <span class="st">"我的第一个 RUIF 窗口"</span>, Tokens.FontValue, Tokens.Text, TextAnchor.MiddleLeft);
+
+        <span class="cm">// 3) 内容：一块面板 + 两行统计</span>
+        Draw.Box(body, Tokens.Panel);
+        Draw.Border(body, Tokens.Border);
+        Rect inner = Layout.Inset(body, Tokens.CardPadX, Tokens.CardPadY);
+        <span class="kw">var</span> rows = Layout.Column(inner, Tokens.SpaceXs);
+        PanelAtoms.SectionBar(rows.Take(Tokens.SectionTitleHeight), <span class="st">"殖民地概览"</span>, <span class="st">"2 项"</span>, <span class="kw">true</span>);
+        PanelAtoms.StatRow(rows.Take(22f), <span class="st">"人口"</span>, <span class="st">"7"</span>, 7f / 12f, Tokens.Accent);
+        PanelAtoms.StatRow(rows.Take(22f), <span class="st">"食物"</span>, <span class="st">"1 240"</span>);
+
+        <span class="cm">// 4) 按钮：RUIF 不提供通用按钮，直接用原版 Widgets</span>
+        <span class="kw">if</span> (Widgets.ButtonText(foot, <span class="st">"确定"</span>)) Close();
+    }
+}</code></pre>
+  <div class="callout"><b>打开它</b>：<code>Find.WindowStack.Add(new Dialog_MyFirstWindow());</code>（放在某个按钮/Def 的入口里即可）。</div>
+
+  <h3>想让它变成 Mod 设置页或 Tab？</h3>
+  <p>RUIF 不挑容器，上面的 <code>DoWindowContents</code> 代码同样适用于 <code>ITab</code>、<code>MainTabWindow</code>、
+  <code>Dialog</code>。你只要把 <code>inRect</code> 交给 <code>Layout.Column</code>，剩下的都一样。</p>
+</section>
+
+<section id="layout">
+  <h2>④ 布局速成（四招够用一辈子）</h2>
+  <table>
+    <tr><th>我想要</th><th>这么写</th><th>说明</th></tr>
+    <tr><td>竖着分行</td><td><code>var col = Layout.Column(rect, Tokens.Gap);</code><br><code>Rect a = col.Take(30f);</code><br><code>Rect rest = col.Rest;</code></td><td>返回的是 struct 游标，<b>每帧新建、零堆分配</b></td></tr>
+    <tr><td>横着分列</td><td><code>var row = Layout.Row(rect, Tokens.SpaceSm);</code><br><code>Rect left = row.Take(160f);</code></td><td>同样的 Take / Rest，只是方向变宽度</td></tr>
+    <tr><td>左右分栏（有比例）</td><td><code>Layout.Split(rect, 0.3f, Tokens.Gap, out Rect left, out Rect right);</code></td><td>0.3 = 左边占 30%</td></tr>
+    <tr><td>留内边距</td><td><code>Rect inner = Layout.Inset(rect, Tokens.CardPadX, Tokens.CardPadY);</code></td><td>比手算 x+12 少犯错</td></tr>
+    <tr><td>网格铺开</td><td><code>var g = Layout.Grid(rect, 3, 90f, Tokens.GridGap);</code><br><code>while (…) { Rect cell = g.Next(); }</code></td><td>3 列、每格高 90；到末尾返回空矩形</td></tr>
+    <tr><td>内容比区域高</td><td><code>Rect view = Layout.BeginScroll(body, 640f, ref scroll);</code><br><code>… 画 view 里面 …</code><br><code>Layout.EndScroll();</code></td><td><b>成对调用</b>；滚动位置 <code>scroll</code> 由你持有</td></tr>
+    <tr><td>把东西钉在角落</td><td><code>Atoms.Anchor(rect, Anchor9.TopRight, new Vector2(16f, 16f), 4f)</code></td><td>九宫锚点</td></tr>
+    <tr><td>保持宽高比</td><td><code>Atoms.AspectBox(rect, 16f / 9f)</code></td><td>头像、预览图常用</td></tr>
+  </table>
+  <div class="warnbox"><b>一个常见误解：</b>游标是<b>值类型</b>，<code>Take</code> 之后要接收返回值：
+  <code>col.Take(30f)</code> 单独写一行没有意义——<b>必须接</b>：<code>Rect r = col.Take(30f);</code>。
+  <code>col</code> 自身会被推进，所以连切多刀不需要重新赋值。</div>
+</section>
+
+<section id="recipes">
+  <h2>⑤ 组件配方表（按“想做什么”查，复制即用）</h2>
+  <p class="mut">下表每一行都是一次真实调用，已随本教程一起编译验证。<code>r</code> 泛指你切好的矩形。</p>
+
+  <h3>面板与卡片</h3>
+  <table>
+    <tr><th>我想…</th><th>一行代码</th></tr>
+    <tr><td>一块面板底板</td><td><code>Draw.Box(r, Tokens.Panel); Draw.Border(r, Tokens.Border);</code></td></tr>
+    <tr><td>带标题的分区框</td><td><code>Rect inner = Atoms.SectionFrame(r, "装备清单");</code></td></tr>
+    <tr><td>凹陷面板（内阴影感）</td><td><code>Shapes.InsetPanel(r);</code></td></tr>
+    <tr><td>四角 L 框装饰</td><td><code>Shapes.CornerFrame(r, Tokens.Accent);</code></td></tr>
+    <tr><td>渐变分隔线 / 带文字分隔</td><td><code>Shapes.GradientRule(r, Tokens.Accent);</code> / <code>Shapes.RuleWithLabel(r, "本页 3 条", Tokens.Muted);</code></td></tr>
+    <tr><td>水印</td><td><code>Shapes.Watermark(r, "草稿");</code></td></tr>
+    <tr><td>统计行（标签+值+进度条）</td><td><code>PanelAtoms.StatRow(r, "人口", "7", 7f / 12f, Tokens.Accent);</code></td></tr>
+    <tr><td>可折叠的分段头</td><td><code>PanelAtoms.SectionBar(r, "殖民地概览", "3 项", expanded);</code></td></tr>
+    <tr><td>警示闪边（0→1 进度）</td><td><code>PanelAtoms.FlashOverlay(r, 0.5f, Tokens.Dead);</code></td></tr>
+    <tr><td>迷你档案条（首字母头像）</td><td><code>PanelAtoms.MiniProfileChip(r, "小", "小明", 0.8f, 0.6f);</code></td></tr>
+  </table>
+
+  <h3>文字</h3>
+  <table>
+    <tr><th>我想…</th><th>一行代码</th></tr>
+    <tr><td>随便画一行字</td><td><code>Draw.Label(r, "文本", Tokens.FontBody, Tokens.Text, TextAnchor.MiddleLeft);</code></td></tr>
+    <tr><td>大数字 + 单位</td><td><code>TextAtoms.UnitLabel(r, TextFmt.FormatNumber(12480), "银");</code> ← 自动变成 <b>12.5k</b></td></tr>
+    <tr><td>主副标题两行</td><td><code>TextAtoms.SubtitleLine(r, "夜班效率", "↑ 12%");</code></td></tr>
+    <tr><td>打字机效果</td><td><code>TextAtoms.Typewriter(r, "正在记录…", 0.5f, Tokens.FontBody, Tokens.Muted);</code></td></tr>
+    <tr><td>文字太长怕溢出</td><td><code>VisualAtoms.OverflowFade(r, text, Tokens.Panel);</code></td></tr>
+  </table>
+
+  <h3>状态与进度</h3>
+  <table>
+    <tr><th>我想…</th><th>一行代码</th></tr>
+    <tr><td>呼吸状态点</td><td><code>StatusAtoms.PulseDot(r, Tokens.Alive, t);</code> ← <code>t</code> 传 <code>Time.realtimeSinceStartup</code></td></tr>
+    <tr><td>✓ ! ✕ ‖ 小图示</td><td><code>StatusAtoms.Glyph(r, StatusKind.Warn);</code></td></tr>
+    <tr><td>转圈加载</td><td><code>StatusAtoms.Spinner(r, t);</code>（零贴图）或 <code>StatusAtoms.Spinner(r, t, tex)</code></td></tr>
+    <tr><td>展开/收起箭头</td><td><code>StatusAtoms.Caret(r, expanded);</code></td></tr>
+    <tr><td>容量条（600/1000）</td><td><code>ProgressAtoms.CapacityBar(r, 640f, 1000f, Tokens.Accent);</code></td></tr>
+    <tr><td>斜切填充进度</td><td><code>ProgressAtoms.FillWipe(r, progress01);</code></td></tr>
+    <tr><td>缩放指示 + 复位按钮</td><td><code>if (ProgressAtoms.ZoomIndicator(r, zoom)) zoom = 1f;</code></td></tr>
+  </table>
+
+  <h3>输入控件（全部无状态：值由你持有）</h3>
+  <table>
+    <tr><th>我想…</th><th>一行代码</th></tr>
+    <tr><td>分段选择（查看｜编排）</td><td><code>if (InputAtoms.Segmented(r, new[] { "总览", "库存" }, ref segIndex)) { }</code></td></tr>
+    <tr><td>开关</td><td><code>if (InputAtoms.ToggleSwitch(r, ref on)) { }</code></td></tr>
+    <tr><td>步进器 −/+</td><td><code>if (InputAtoms.Stepper(r, ref count, 0, 10)) { }</code></td></tr>
+    <tr><td>滑条 + 数值</td><td><code>if (InputAtoms.SliderWithValue(r, ref amount, 0f, 1f, 0.01f, p =&gt; p.ToString("P0"))) { }</code></td></tr>
+    <tr><td>搜索框（含防抖）</td><td><code>if (InputAtoms.SearchField(r, ref query, ref buffer, "搜索…", ref lastInputTime)) { }</code></td></tr>
+    <tr><td>标签多选</td><td><code>if (InputAtoms.TagPicker(r, all, picked)) { }</code></td></tr>
+    <tr><td>快捷数量（1/10/100/满）</td><td><code>if (InputPlusAtoms.QuickAmounts(r, "数量", ref value, 100f)) { }</code></td></tr>
+    <tr><td>滚轮调值</td><td><code>if (InputPlusAtoms.WheelAdjust(r, ref value, 1f, 0f, 100f)) { }</code></td></tr>
+    <tr><td>数字输入框</td><td><code>if (InputPlusAtoms.NumericField(r, ref value, 0f, 100f, ref buffer)) { }</code></td></tr>
+    <tr><td>下拉（走原版 FloatMenu）</td><td><code>if (InputPlusAtoms.InPlaceDropdown(r, "选择", options, cur, i =&gt; cur = i)) { }</code></td></tr>
+  </table>
+  <p class="mut">规律：<b>凡是会变化的返回值都返回 <code>bool</code>——“这一帧被改动了吗”</b>，值本身通过 <code>ref</code> 交回给你。
+  所以 RUIF 组件永远不会偷偷持有你的状态。</p>
+
+  <h3>数据与图表</h3>
+  <table>
+    <tr><th>我想…</th><th>一行代码</th></tr>
+    <tr><td>技能条（多列）</td><td><code>DataAtoms.SkillBars(r, names, levels, 20f, 2);</code></td></tr>
+    <tr><td>排行榜</td><td><code>DataAtoms.RankList(r, names, values, maxValue);</code></td></tr>
+    <tr><td>特性标签（正负面配色）</td><td><code>DataAtoms.TraitChips(r, traits, positive);</code></td></tr>
+    <tr><td>统计表</td><td><code>DataAtoms.StatTable(r, headers, rows, shares, 20f);</code></td></tr>
+    <tr><td>时间线</td><td><code>DataAtoms.TimelinePro(r, dates, texts, kinds, 22f);</code></td></tr>
+    <tr><td>走势小图</td><td><code>Charts.Sparkline(r, values, Tokens.Accent);</code></td></tr>
+    <tr><td>折线 / 柱状 / 环形</td><td><code>Charts.LineChart(r, values);</code> · <code>Charts.BarChartV(r, values, labels);</code> · <code>Charts.DonutChart(r, values, 0.55f, "占比");</code></td></tr>
+    <tr><td>热力网格</td><td><code>Charts.HeatmapGrid(r, new[,] { { 0.1f, 0.4f }, { 0.9f, 0.3f } });</code> ← <b>二维数组</b></td></tr>
+    <tr><td>官方数据（记录/财富/账单…）</td><td><code>OfficialDataAtoms.RecordsTable(r, labels, values);</code> · <code>OfficialDataAtomsB.BillList(r, names, done, target, paused);</code></td></tr>
+  </table>
+  <p class="mut">图表的铁律：<b>它们是纯输出组件，不读鼠标、不读事件</b>——要做交互，你在同一个 rect 上自己判定点击即可。</p>
+
+  <h3>导航与反馈</h3>
+  <table>
+    <tr><th>我想…</th><th>一行代码</th></tr>
+    <tr><td>选项卡</td><td><code>NavAtoms.TabBar(r, tabs, ref sel, ref indicatorX);</code></td></tr>
+    <tr><td>面包屑</td><td><code>NavAtoms.Breadcrumb(r, path, i =&gt; { });</code></td></tr>
+    <tr><td>分页</td><td><code>NavAtoms.Pager(r, 120, 20, ref page);</code></td></tr>
+    <tr><td>时间流速控制</td><td><code>NavAtomsB.TimeSpeedControl(r, ref speed);</code> ← 参数类型是原版 <code>TimeSpeed</code></td></tr>
+    <tr><td>Toast 提示</td><td><code>FeedbackAtoms.Toast(r, "已记录", "3 条新档案", ToastLevel.Ok, alpha);</code></td></tr>
+    <tr><td>横幅告警</td><td><code>if (FeedbackAtoms.AlertBanner(r, AlertPriority.Urgent, "食物不足", "去处理")) { }</code></td></tr>
+    <tr><td>确认对话框</td><td><code>if (FeedbackAtoms.ConfirmDialog(r, "确认删除？", "不可撤销", danger: true)) { }</code></td></tr>
+    <tr><td>空状态</td><td><code>if (FeedbackAtoms.EmptyState(r, "暂无档案", "先去搞点事", "刷新")) { }</code></td></tr>
+    <tr><td>分步进度</td><td><code>FeedbackAtomsB.StepProgressList(r, steps, 1);</code></td></tr>
+    <tr><td>便签</td><td><code>FeedbackAtomsB.StickyNote(r, "记得交班", Tokens.Warn);</code></td></tr>
+  </table>
+  <p class="mut">完整清单（115 类型；成员数不写死）见随包 <code>API参考.md</code>。<b>本表只覆盖最常用的 ~40 个</b>，
+  剩下的按同一套命名规律找：<code>XxxAtoms</code> 负责画，<code>XxxFmt</code> 负责算（纯函数、可单测）。</p>
+</section>
+
+<section id="pit">
+  <h2>⑥ 六个必踩的坑（含正解）</h2>
+
+  <h3>坑 1 · 类里自己有个 <code>Draw</code> 方法 → CS0119</h3>
+  <p>如果你写的类里已经有 <code>void Draw(...)</code>，那裸写 <code>Draw.Label(...)</code> 会被编译器解析成
+  “你自己那个方法组”，于是报 <code>CS0119</code>。</p>
+  <pre><code><span class="kw">public void</span> Draw(Rect r)
+{
+    <span class="cm">// ❌ Draw.Label(r, ...);              ← CS0119</span>
+    RUIF.Draw.Label(r, <span class="st">"全限定调用"</span>, Tokens.FontBody, Tokens.Text, TextAnchor.MiddleLeft);   <span class="cm">// ✅</span>
+    RUIF.Draw.Box(r, Tokens.Panel);                                                            <span class="cm">// ✅</span>
+}</code></pre>
+
+  <h3>坑 2 · 手改 <code>GUI.color</code> → 染色泄漏到全游戏</h3>
+  <p>原版 <code>Widgets.DrawBoxSolid</code> 会重置 <code>GUI.color</code>，手写 try/finally 又容易漏。用作用域，
+  <b>离开 using 自动恢复</b>：</p>
+  <pre><code><span class="kw">using</span> (RUIF.Draw.Color(Tokens.AccentSoft)) RUIF.Draw.Box(r, Tokens.AccentSoft);
+<span class="kw">using</span> (RUIF.Draw.Font(Tokens.FontValue))    RUIF.Draw.Label(r, <span class="st">"大号"</span>, Tokens.FontValue, Tokens.Text, TextAnchor.MiddleCenter);
+<span class="kw">using</span> (RUIF.Draw.Anchor(TextAnchor.UpperRight)) RUIF.Draw.Label(r, <span class="st">"右上"</span>, Tokens.FontLabel, Tokens.Muted, TextAnchor.UpperRight);
+<span class="kw">using</span> (RUIF.Draw.Enabled(<span class="kw">false</span>)) Widgets.ButtonText(r, <span class="st">"禁用态按钮"</span>);   <span class="cm">// 想半透明/不可点：用 Enabled</span>
+Color 半透明 = RUIF.Draw.WithAlpha(Tokens.Panel, 0.5f);                          <span class="cm">// 而不是自己 new Color</span></code></pre>
+
+  <h3>坑 3 · 到处找“RUIF 的按钮” → 找不到</h3>
+  <p><b>RUIF 故意不提供通用按钮</b>（按钮是最容易做歪的控件）。请直接用原版：</p>
+  <pre><code><span class="kw">if</span> (Widgets.ButtonText(r, <span class="st">"确定"</span>)) { <span class="cm">/* 被点击 */</span> }
+<span class="cm">// 要禁用：原版 ButtonText 没有 disabled 参数 —— 用 Draw.Enabled(false) 包住，或用 active:false 重载</span></code></pre>
+
+  <h3>坑 4 · <code>Command</code> 二义性 → CS0104</h3>
+  <p><code>RUIF.Command</code>（给命令面板用）与 <code>Verse.Command</code>（原版存在）同名。
+  同时 <code>using RUIF; using Verse;</code> 时<b>必须写全</b>：</p>
+  <pre><code><span class="kw">var</span> cmds = <span class="kw">new</span> List&lt;RUIF.Command&gt;();          <span class="cm">// ✅ 写 RUIF.Command</span>
+<span class="cm">// var cmds = new List&lt;Command&gt;();            ← ❌ CS0104：Command 是 RUIF.Command 和 Verse.Command 之间的不明确引用</span></code></pre>
+
+  <h3>坑 5 · 照抄签名却报 CS1503“无法从 float[] 转换为 float[*,*]”</h3>
+  <p>个别组件收的是<b>多维数组</b>。例如热力网格是 <code>grid[行, 列]</code>：</p>
+  <pre><code>Charts.HeatmapGrid(r, <span class="kw">new</span>[,] { { 0.1f, 0.4f, 0.9f }, { 0.3f, 0.6f, 0.2f } });   <span class="cm">// ✅ 2 行 3 列</span></code></pre>
+  <p class="mut">（<code>API参考.md</code> 曾把 <code>float[,]</code> 误印成 <code>float[]</code>，v1.0.1 已修正——若你手上是旧版文档，以签名报错提示的 <code>[*,*]</code> 为准。）</p>
+
+  <h3>坑 6 · 自己 <code>new Color(...)</code> 调色</h3>
+  <p>RUIF 的颜色是<b>固定令牌</b>（<code>Tokens.*</code>），不是可换肤主题。想做自定义配色，就在<b>你自己的 Mod 里</b>持有颜色常量；
+  想基于令牌派生（变暗/半透明），用 <code>Draw.WithAlpha</code>。</p>
+  <div class="danger"><b>别期待的东西（说清楚，免得你白找）：</b>框架<b>没有</b>主题/换肤、<b>没有</b>保留模式自动 diff、
+  <b>没有</b>内置演示界面、<b>没有</b>圆角/自适应高度的 Layout 容器。这些都在《接入指南》里按 ✅/⚠️/❌ 三级如实标注。</div>
+</section>
+
+<section id="loc">
+  <h2>⑦ 本地化（你的文案要能翻译）</h2>
+  <ul>
+    <li>RUIF 自己带 <code>Languages/ChineseSimplified|English</code> 各 60 键（组件内部文案），<b>你不用管</b>。</li>
+    <li><b>你传给 RUIF 的字符串由你负责</b>：写死中文 = 英文玩家看到中文。正确做法是走原版翻译：
+      <code>"MyMod_Label".Translate()</code>，键写进你自己的 <code>Languages/*/Keyed/*.xml</code>。</li>
+    <li>Def 里的文本走 <b>DefInjected</b>，代码里的文本走 <b>Keyed</b>——这是原版纪律，RUIF 不改变它。</li>
+    <li>不要拿翻译结果做逻辑判断（中英文案都可能被玩家改）。</li>
+  </ul>
+</section>
+
+<section id="errors">
+  <h2>⑧ 报错对照表（看到报错先查这里）</h2>
+  <table>
+    <tr><th>报错</th><th>真实原因</th><th>怎么改</th></tr>
+    <tr><td><code>CS0119</code>：「Draw」是方法组而非类型</td><td>你类里定义了名为 <code>Draw</code> 的方法</td><td>写全限定 <code>RUIF.Draw.*</code></td></tr>
+    <tr><td><code>CS0104</code>：Command 是不明确的引用</td><td><code>RUIF.Command</code> 与 <code>Verse.Command</code> 同名</td><td>写全限定 <code>RUIF.Command</code></td></tr>
+    <tr><td><code>CS1503</code>：无法从 <code>float[]</code> 转换为 <code>float[*,*]</code></td><td>该组件要的是二维数组</td><td>用 <code>new[,] { { … }, { … } }</code></td></tr>
+    <tr><td><code>CS0618</code>：<code>Translate</code> 已过时</td><td>用了 <code>params object[]</code> 重载</td><td>改用 <code>Translate(NamedArgument)</code></td></tr>
+    <tr><td><code>CS0117</code>：类型不包含某成员</td><td>看了过期文档或猜的 API 名</td><td>以随包 <code>DevDocs/API参考.md</code> 为准（它是从 dll 反射生成的）</td></tr>
+    <tr><td>运行期 <code>FileNotFoundException: RUIF</code></td><td>玩家没装 RUIF，或你走软依赖却直接调了 RUIF 类型</td><td>硬依赖：About.xml 写 <code>modDependencies</code>；软依赖：把调用隔离进独立方法</td></tr>
+    <tr><td>界面颜色全乱 / 文字串色</td><td>手改了 <code>GUI.color</code> 没恢复</td><td>一律用 <code>Draw.Color / Draw.WithAlpha / Draw.Enabled</code> 作用域</td></tr>
+    <tr><td>你的包里有 <code>RUIF.dll</code></td><td><code>Private</code> 没设 <code>false</code></td><td>改成 <code>&lt;Private&gt;false&lt;/Private&gt;</code>，并删掉包内那份副本</td></tr>
+  </table>
+</section>
+
+<section id="map">
+  <h2>⑨ 接下来该看哪份文档</h2>
+  <table>
+    <tr><th>我想…</th><th>看这个</th></tr>
+    <tr><td>查某个方法的确切签名（参数名、返回值、默认值）</td><td><code>API参考.md</code>（自动生成，与 dll 同源）</td></tr>
+    <tr><td>在 IDE 里看中文悬停注释</td><td>引用 <code>RUIF.dll</code> 后同目录的 <code>RUIF.xml</code> 生效（本包已随附）</td></tr>
+    <tr><td>看组件长什么样、有哪些配方</td><td><code>终极宝典v1.0-fixed.html</code>（离线全量组件卡 + 版式模式）</td></tr>
+    <tr><td>完整接入流程 / 引擎能不能做到</td><td><code>接入指南与引擎可行性审计.html</code>（✅ 原生 / ⚠️ 有代价 / ❌ 不承诺）</td></tr>
+    <tr><td>按用途找组件</td><td><code>组件库全量目录.md</code></td></tr>
+    <tr><td>版本改了什么、有没有破坏性变更</td><td><code>CHANGELOG.md</code></td></tr>
+    <tr><td>还想更省事</td><td><code>开发者入口.html</code>（30 秒定位版，本教程是它的"手把手加长版"）</td></tr>
+  </table>
+</section>
+
+<section id="full">
+  <h2>⑩ 完整示例：一个“殖民地状态”窗口（约 120 行）</h2>
+  <p>把本教程的零件拼起来的样子 —— 有滚动、选项卡、统计行、输入控件、图表、反馈。整段已真编译验证。</p>
+  <pre><code><span class="kw">using</span> RUIF;
+<span class="kw">using</span> UnityEngine;
+<span class="kw">using</span> Verse;
+
+<span class="kw">public class</span> Dialog_ColonyPanel : Window
+{
+    <span class="kw">private readonly float</span>[] series = { 3f, 6f, 2f, 9f, 4f, 7f };
+    <span class="kw">private readonly float</span>[] shares = { 0.4f, 0.2f, 0.2f, 0.2f };
+    <span class="kw">private</span> Vector2 scroll;
+    <span class="kw">private int</span> tab;
+    <span class="kw">private float</span> tabX;
+    <span class="kw">private int</span> segIndex;
+    <span class="kw">private float</span> amount = 0.5f;
+
+    <span class="kw">public override</span> Vector2 InitialSize =&gt; <span class="kw">new</span> Vector2(780f, 560f);
+
+    <span class="kw">public override void</span> DoWindowContents(Rect inRect)
+    {
+        <span class="kw">var</span> col = Layout.Column(inRect, Tokens.Gap);
+        Rect head = col.Take(30f);
+        Draw.Label(head, <span class="st">"殖民地状态"</span>, Tokens.FontValue, Tokens.Text, TextAnchor.MiddleLeft);
+
+        <span class="cm">// 可滚动内容区</span>
+        Rect view = Layout.BeginScroll(col.Take(400f), 640f, <span class="kw">ref</span> scroll);
+        <span class="kw">var</span> v = Layout.Column(view, Tokens.BlockGap);
+
+        <span class="cm">// 顶部选项卡</span>
+        NavAtoms.TabBar(v.Take(30f), <span class="kw">new</span>[] { <span class="st">"总览"</span>, <span class="st">"库存"</span>, <span class="st">"人员"</span> }, <span class="kw">ref</span> tab, <span class="kw">ref</span> tabX);
+
+        <span class="cm">// 统计面板</span>
+        Rect card = v.Take(120f);
+        Draw.Box(card, Tokens.Panel);
+        Draw.Border(card, Tokens.Border);
+        <span class="kw">var</span> c = Layout.Column(Layout.Inset(card, Tokens.CardPadX, Tokens.CardPadY), Tokens.SpaceXs);
+        PanelAtoms.SectionBar(c.Take(Tokens.SectionTitleHeight), <span class="st">"今日概览"</span>, <span class="st">"3 项"</span>, <span class="kw">true</span>);
+        PanelAtoms.StatRow(c.Take(22f), <span class="st">"人口"</span>, <span class="st">"7"</span>, 7f / 12f, Tokens.Accent);
+        PanelAtoms.StatRow(c.Take(22f), <span class="st">"食物"</span>, <span class="st">"1 240"</span>, 0.62f);
+        PanelAtoms.StatRow(c.Take(22f), <span class="st">"电力"</span>, <span class="st">"-320 W"</span>);
+
+        <span class="cm">// 图表一行</span>
+        <span class="kw">var</span> ch = Layout.Row(v.Take(80f), Tokens.SpaceMd);
+        Charts.Sparkline(ch.Take(160f), series, Tokens.Accent);
+        Charts.LineChart(ch.Take(240f), series);
+        Charts.DonutChart(ch.Take(90f), shares, 0.55f, <span class="st">"占比"</span>);
+
+        <span class="cm">// 输入一行（值由窗口持有）</span>
+        <span class="kw">var</span> ip = Layout.Row(v.Take(28f), Tokens.SpaceSm);
+        <span class="kw">if</span> (InputAtoms.Segmented(ip.Take(210f), <span class="kw">new</span>[] { <span class="st">"日"</span>, <span class="st">"周"</span>, <span class="st">"月"</span> }, <span class="kw">ref</span> segIndex)) { }
+        <span class="kw">if</span> (InputAtoms.SliderWithValue(ip.Rest, <span class="kw">ref</span> amount, 0f, 1f, 0.01f)) { }
+
+        <span class="cm">// 反馈条</span>
+        FeedbackAtoms.Toast(v.Take(48f), <span class="st">"已记录"</span>, <span class="st">"3 条新档案"</span>, ToastLevel.Ok, 1f);
+
+        Layout.EndScroll();
+
+        <span class="kw">if</span> (Widgets.ButtonText(col.Rest, <span class="st">"关闭"</span>)) Close();
+    }
+}</code></pre>
+  <div class="callout"><b>这些示例怎么保证没骗你：</b>它们被逐字收进随包的示例验证工程，
+  对<b>发布区的 RUIF.dll</b> 真跑了一次编译（0 错 0 警）。文档改示例 → 重跑一次编译即可，不再靠人眼。</div>
+</section>
+
+<footer style="border-top:1px solid var(--border);padding:18px 0;color:var(--muted);font-size:12px">
+  RUIF v1.1.0 零基础上手教程 · 面向第三方开发者 · 示例已对随包 dll 真编译验证
+</footer>
+</main>
+</body>
+</html>

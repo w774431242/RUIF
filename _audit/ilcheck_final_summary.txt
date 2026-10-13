@@ -1,0 +1,15 @@
+﻿exit=0
+--- log ---
+
+宸叉垚鍔熺敓鎴愩€?
+    0 涓鍛?
+    0 涓敊璇?
+
+宸茬敤鏃堕棿 00:00:01.23
+
+--- 真实项目完整性核对 ---
+real RUIF.dll MD5 = 36EFB5809FEB1AAFC6FBF1619076FF8C
+real Source/Tr.cs 含 __CALLSITE_PROBE / Obsolete = True
+copied Tr.cs 含 __CALLSITE_PROBE = True
+copied Tr.cs 含 Obsolete = True
+copy build output dir = True

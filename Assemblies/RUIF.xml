@@ -64,10 +64,38 @@
             <summary>绘制旋转作用域（Caret 展开动画、贴图旋转绘制等）。</summary>
         </member>
         <member name="T:RUIF.Draw.RotateScope">
-            <summary>GUI.matrix 旋转作用域：进入时绕 pivot 旋转，退出时恢复原矩阵。</summary>
+             <summary>
+             GUI.matrix 旋转作用域：进入时**在当前坐标系内绕 pivot 旋转**，退出时恢复原矩阵。
+            
+             <para><b>⛔ 不再使用 <c>GUIUtility.RotateAroundPivot</c>（2026-09-12 根因修复）</b>：
+             该 Unity API 把 pivot 当作「**应用旋转前的 GUI 空间**」坐标 —— 其内部实现是先把矩阵归零、
+             再合成 <c>T(p) · R · T(-p) · M</c> ⇒ **p 是在外层矩阵之前解释的**，而不是调用点所在的局部空间。
+             于是只要外层已有平移/裁剪作用域（窗口偏移、<c>GUI.BeginClip</c>、<c>GUI.BeginGroup</c>、
+             滚动视图），"按 rect 局部坐标传 pivot"就会**整体错位**：元素画在容器内、旋转却发生在容器外，
+             结果被甩到容器之外（实测事故：<c>Industrial.Gauge</c> 的 45×N 个 8×3 分区色块飞满整屏，
+             见 `PersonalChronicle` 侧 `制造系统中心_RUIF改造方案.md` §10）。</para>
+            
+             <para><b>正确语义</b>：构造**局部空间**旋转矩阵并**后乘**当前矩阵
+             （<c>M' = M · T(p) · R · T(-p)</c>）—— 语义即"先把绘制点绕**局部 pivot** 旋转，再做外层变换"，
+             与调用点（<c>Draw.Box</c> / <c>Draw.Label</c> 的落点）严格同空间，
+             且与外层矩阵是平移、缩放还是旋转**无关**。调用点因此只需传 rect 局部坐标。</para>
+             </summary>
         </member>
         <member name="M:RUIF.Draw.RotateScope.Dispose">
             <summary>恢复进入前的 GUI.matrix。</summary>
+        </member>
+        <member name="M:RUIF.Draw.LocalRotation(System.Single,UnityEngine.Vector2)">
+             <summary>
+             **局部空间**旋转矩阵（绕 <paramref name="pivot"/> 旋转 <paramref name="angle"/> 度）：
+             <c>T(pivot) · R(angle) · T(-pivot)</c>。纯函数（不读写任何 GUI 状态）⇒ 可离线单测
+             （见 `Tests/DrawRotateTests.cs`）。
+            
+             <para><b>用途与语义</b>：<see cref="T:RUIF.Draw.RotateScope"/> 把它**后乘**当前 <c>GUI.matrix</c>，
+             得到"在调用点自身坐标系内绕局部 pivot 旋转"的语义 —— 这正是 <c>Draw.Box/Label</c> 传 rect
+             局部坐标时需要的；无论外层矩阵是平移、缩放还是旋转都不受影响。
+             对比：<c>GUIUtility.RotateAroundPivot</c> 的 pivot 是"旋转前的 GUI 空间"语义，
+             在外层有平移/裁剪作用域时会整体错位（详见 <see cref="T:RUIF.Draw.RotateScope"/> 注释）。</para>
+             </summary>
         </member>
         <member name="T:RUIF.Draw.ColorScope">
             <summary>GUI.color 作用域。</summary>
@@ -119,8 +147,350 @@
             ⚠️ 只对<b>中性色</b>贴图有意义（自带配色的贴图用语义色去乘会画出脏色）。
             </summary>
         </member>
+        <member name="M:RUIF.Draw.EllipsisLabel(UnityEngine.Rect,System.String,Verse.GameFont,UnityEngine.Color,UnityEngine.TextAnchor)">
+            <summary>
+            溢出省略标签：放不下时截断并补省略号，而不是让文字被矩形<b>硬切</b>。
+            <para>这是"文本被切割"的常规解 —— 硬切一半的字比"…"难看得多，也更难判断是布局错了还是内容真的长。
+            底层 <c>Widgets.LabelEllipses</c>（内部走原版 <c>Text.ClampTextWithEllipsis</c>）。</para>
+            <para>与 <see cref="M:RUIF.Draw.Label(UnityEngine.Rect,System.String,Verse.GameFont,UnityEngine.Color,UnityEngine.TextAnchor)"/> 的差别仅在"放不下时的行为"：本方法给你省略号，<see cref="M:RUIF.Draw.Label(UnityEngine.Rect,System.String,Verse.GameFont,UnityEngine.Color,UnityEngine.TextAnchor)"/> 给你裁切。</para>
+            </summary>
+        </member>
         <member name="M:RUIF.Draw.WithAlpha(UnityEngine.Color,System.Single)">
             <summary>保留 RGB 覆写 alpha（Pill / Badge 的底色派生用）。</summary>
+        </member>
+        <member name="T:RUIF.Measure">
+             <summary>
+             L0 · 文本测量与行高（"参数空间"的量化入口）。
+            
+             <para><b>为什么必须有这一层</b>：布局里最常见的两类事故 —— 文本被硬切、组件与标题错位 ——
+             根因都是<b>行高靠手写魔数</b>。中文在不同字号下的实际行高并不等于"数字 + 2"，
+             而原版字号只有三档（<c>GameFont{Tiny,Small,Medium}</c>），所以行高<b>只能向引擎取值</b>：
+             <see cref="M:RUIF.Measure.RowHeight(Verse.GameFont)"/> 直接转发 <c>Text.LineHeightOf</c> —— 那是原版在静态构造期
+             逐个字号实测出来的真值表，不是任何"约定俗成的数字"。
+             历史上这里写死的 18f / 22f / 30f 三个数字全部撤除（详见 <see cref="M:RUIF.Measure.RowHeight(Verse.GameFont)"/>）。</para>
+            
+             <para><b>⚠ 必须保持为方法，不得缓存</b>：<c>Text.TinyFontSupported</c> 运行期可变
+             （玩家可在选项里随时勾选「禁用小字体」）⇒ 任何"首次访问即定值"的 <c>static readonly</c>
+             缓存都会冻错值。<see cref="M:RUIF.Measure.RowHeight(Verse.GameFont)"/> 因此是<b>每次调用都重新求值</b>的纯转发。</para>
+            
+             <para><b>⛔ 不要在这里封装 <c>Text.CalcHeight</c></b>：原版<b>没有</b>它的缓存版，
+             提供包装等于邀请别人每帧调用 —— 这是性能事故（取证 §5 第 7 条：文本测量必须走缓存）。
+             需要精确高度时自行调用并**自己缓存**。</para>
+            
+             <para><b>与 <see cref="T:RUIF.Px"/> 的分工</b>：<see cref="T:RUIF.Px"/> 管"坐标落在哪个物理像素"，
+             本类管"一段文本需要多少逻辑高度/宽度"。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.Measure.RowHeight(Verse.GameFont)">
+             <summary>
+             行高（逻辑像素）—— 取<b>引擎真值</b>，并叠加原版的<b>静默降级镜像</b>。
+            
+             <para><b>原实现（已删除）</b>：手写魔数 <c>Tiny=18f / Medium=30f / default=22f</c>。
+             三档全是估值：Tiny 真值不等于 18、Medium 真值不等于 30，而 <c>default</c> 分支
+             还会把任何未来新增字号静默当成 Small ⇒ 布局与文字实际占位不一致，
+             表现即"文字压到图形上 / 被矩形硬切"。</para>
+            
+             <para><b>为什么必须叠一层 <see cref="M:RUIF.Measure.DegradeTiny(Verse.GameFont,System.Boolean)"/></b>：<c>Verse.Text</c> 的
+             <c>Font</c> setter 会<b>静默</b>把不受支持的 Tiny 降级成 Small（<c>Verse.Text.cs:31-35</c>），
+             因此"请求 Tiny"与"实际画出的字号"在禁用小字体时并不相同；
+             行高必须跟随<b>实际画出的</b>那一档，否则仍然错位。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.Measure.DegradeTiny(Verse.GameFont,System.Boolean)">
+             <summary>
+             镜像原版 <c>Verse.Text.Font</c> setter 的静默降级规则（<c>Verse.Text.cs:31-35</c>）：
+             Tiny 不受支持时，原版把它当 Small 画。
+            
+             <para><b>纯函数</b>（不读写任何引擎状态）⇒ 可在<b>无 Unity 宿主的离线单测</b>里断言。
+             这是本类唯一的可离线验证入口 —— 单测<b>不得</b>调用 <see cref="M:RUIF.Measure.RowHeight(Verse.GameFont)"/>：
+             那会触碰 <c>Verse.Text</c> 静态构造 → <c>Resources.Load</c>（ECall），
+             在离线 net48 宿主抛异常并拖垮整个测试程序集。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.Measure.ControlHeight(Verse.GameFont)">
+            <summary>带上下呼吸空间的"可点行高"（按钮 / 列表行）—— 比纯文本行高多一圈内边距。</summary>
+        </member>
+        <member name="M:RUIF.Measure.Width(System.String,Verse.GameFont)">
+             <summary>
+             文本宽度（真实测量，<b>不缓存</b>；调用方无需自行设置 <c>Text.Font</c>）。
+            
+             <para><b>⚠ 为什么不用 <c>GenUI.GetWidthCached</c>（原实现，2026-09-16 撤除）</b>：
+             该缓存字典的键<b>只有 string、不含字号</b>
+             （<c>Verse.GenUI.cs:146-160</c> + 缓存字段 <c>:964</c>），且该字典<b>全局共享</b>
+             （原版与其它 Mod 共用同一实例）⇒ <b>跨字号会取到错值</b>：
+             先以 Tiny 量过的串，再以 Medium 查询会拿回 Tiny 的宽度。
+             这是<b>正确性缺陷</b>而非性能取舍，<see cref="M:RUIF.Measure.Fits(System.String,System.Single,Verse.GameFont)"/> 会随之误判。</para>
+            
+             <para><b>为什么不自建带字号的缓存</b>：全仓 <c>Width</c>/<c>Fits</c> 当前<b>无活跃调用点</b>
+             （<c>Clamp</c> 也仅 <c>Industrial.Gauge</c> 1 处）⇒ 零压力。
+             而自建缓存还需额外处理「UI 缩放变化后失效」与「数值串把字典挤爆」两个问题，
+             相对可忽略的收益是<b>净负收益</b>。写法与组件层既有实践一致
+             （<c>DataAtoms.cs</c> / <c>TextAtoms.cs</c> 等均直接 <c>Text.CalcSize</c>）。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.Measure.Fits(System.String,System.Single,Verse.GameFont)">
+            <summary>在给定宽度内是否放得下（用于决定要不要走省略号分支）。</summary>
+        </member>
+        <member name="M:RUIF.Measure.Clamp(System.String,System.Single,Verse.GameFont)">
+             <summary>
+             按宽度截断并补省略号（走 <c>GenText.Truncate</c>）。
+            
+             <para><b>⚠ 缓存与分配事实（2026-09-16 更正）</b>：<c>GenText.Truncate</c> 的第三参
+             <c>Dictionary&lt;string,string&gt; cache</c> 是<b>可选</b>的，不传即<b>零缓存</b>
+             （<c>Verse.GenText.cs:923-928</c>）—— 原注释里"原版自带缓存参数"的说法会让人误以为
+             "不传也走缓存"。且该方法<b>返回新字符串</b>（每帧调用必分配）
+             ⇒ <b>不得放进逐帧热循环</b>；确需在热路径截断时，应由调用方持缓存字典传入。</para>
+            
+             <para>用途：宁可显示"殖民地遭遇持续三天的有毒尘…"，也不要让文本被矩形硬切一半。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.Measure.RowHeight(Verse.GameFont,Verse.GameFont)">
+            <summary>
+            一行"标签 + 值"的高度（两侧取较大字号），用于把行高从魔数改为可推导值。
+            </summary>
+        </member>
+        <member name="T:RUIF.Px">
+             <summary>
+             L0 · 像素对齐（Pixel snap）。把坐标吸附到 UI 缩放网格，消除亚像素模糊。
+            
+             <para><b>为什么必须有这一层</b>：RimWorld 的 UI 缩放（<c>Prefs.UIScale</c>）非整数时，
+             1px 描边/分隔线落在半像素上会被双线性插值糊成 2px 灰边 —— 观感立刻"不是原版"。
+             原版做法是让每个坐标过一遍 <c>UIScaling.AdjustCoordToUIScaling*</c>
+             （实证：<c>Verse.TabRecord.Draw</c> 用它对页签中段做 xMin/xMax 对齐）。本类即该做法的收口。</para>
+            
+             <para><b>⛔ 不在此处调 <c>GUIUtility.RotateAroundPivot</c> 族</b>：与旋转无关，本类只做坐标吸附。</para>
+            
+             <para><b>命名空间注意</b>：底层 <c>UIScaling</c> 位于 <c>LudeonTK</c>（Dev 域），
+             但**生产代码在用**（<c>TabRecord.Draw</c>），故此处直接引用并以此注释留档；
+             消费方只需依赖本类，不必自行 <c>using LudeonTK</c>。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.Px.Snap(UnityEngine.Rect)">
+            <summary>把矩形四边吸附到 UI 缩放网格（xMin/yMin 取 floor，xMax/yMax 取 ceil ⇒ 只会变大不会切内容）。</summary>
+        </member>
+        <member name="M:RUIF.Px.Floor(System.Single)">
+            <summary>单坐标向下吸附（起点用）。</summary>
+        </member>
+        <member name="M:RUIF.Px.Ceil(System.Single)">
+            <summary>单坐标向上吸附（终点用）。</summary>
+        </member>
+        <member name="M:RUIF.Px.Floor(UnityEngine.Vector2)">
+            <summary>点吸附（起点语义）。</summary>
+        </member>
+        <member name="M:RUIF.Px.Span(System.Single,System.Single)">
+            <summary>
+            把 <c>[a, b]</c> 区间吸附后返回<b>不短于原区间</b>的长度 —— 用于分隔线/描边这类"1px 必须真是 1px"的场景。
+            <para>直接对长度取整会把 3.4px 压成 3px 并在相邻处留缝；此处对齐两端后相减，
+            保证覆盖范围只扩不缩。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.Px.HLine(System.Single,System.Single,System.Single)">
+            <summary>水平线用的吸附矩形（高 1px，落在整像素行上）。</summary>
+        </member>
+        <member name="M:RUIF.Px.VLine(System.Single,System.Single,System.Single)">
+            <summary>垂直线用的吸附矩形（宽 1px，落在整像素列上）。</summary>
+        </member>
+        <member name="T:RUIF.TexCache">
+             <summary>
+             L0 · 运行时贴图仓库：把 <see cref="T:RUIF.TexFmt"/> 算出的像素缓冲变成可绘制的 <c>Texture2D</c> 并缓存。
+            
+             <para><b>三条纪律（原版实证）</b>：① 必须主线程（原版
+             <c>SolidColorMaterials.NewSolidColorTexture</c> 自己就查 <c>UnityData.IsInMainThread</c> 并
+             <c>Log.Error</c>）；② 必须命名（原版写成 <c>"SolidColorTex-" + color</c>，便于资产审计）；
+             ③ 必须缓存（原版 <c>SimpleSolidColorMaterial</c> 就是 <c>static Dictionary</c> 模式；
+             每帧 <c>new Texture2D</c> 会持续吃显存）。</para>
+            
+             <para><b>API 形状 = TryGet / Publish 两段式</b>（而非传 <c>Func</c>）：
+             调用方先查缓存，<b>未命中才</b>计算像素 —— 这样每帧的热路径上既无闭包分配，
+             也不会白算一遍只在数据变化时才需要的像素。缓存键一律用 <see cref="T:System.Int64"/>（<see cref="M:RUIF.TexCache.Key(System.Int32,UnityEngine.Color,UnityEngine.Color,System.Int32,System.Int32)"/>
+             把 kind/两色/尺寸压进一个 long），零字符串分配。</para>
+            
+             <para><b>⛔ 不用 <c>MaterialAllocator</c></b>：它是 <c>internal</c>，Mod 不可访问；
+             需要材质走 <c>SolidColorMaterials.SimpleSolidColorMaterial</c>（公开且自带缓存）。</para>
+             </summary>
+        </member>
+        <member name="F:RUIF.TexCache.MaxEntries">
+            <summary>缓存上限，超出按插入顺序淘汰最旧一条。</summary>
+        </member>
+        <member name="M:RUIF.TexCache.Key(System.Int32,UnityEngine.Color,UnityEngine.Color,System.Int32,System.Int32)">
+             <summary>
+             由 (kind, 两色, 尺寸) 生成缓存键 —— <b>哈希混合</b>实现。
+            
+             <para><b>⛔ 2026-09-13 修正（原实现有真实缺陷）</b>：原实现用位段拼接，而 64 位**装不下**
+             <c>kind(8) + 两色(32+32) + w + h</c>，于是把 <c>w</c> 放在低 4 位之外 ——
+             <c>(w &amp; 0xFFFF) &lt;&lt; 60</c> 在 <c>w ≥ 16</c> 时<b>整段溢出被丢弃</b>：
+             实测 <c>w=16 / 32 / 48</c> 生成<b>同一个键</b> ⇒ 不同宽度的渐变共用同一张贴图（分辨率失真）。
+             同时 <c>cb.a</c> 从未参与运算（漏位）。改哈希后<b>每个入参都真实参与计算</b>。</para>
+            
+             <para><b>不可证明单射</b>（哈希固有性质），但已由 <c>Tests/TexCacheTests.cs</c> 覆盖常见组合无碰撞。
+             需要「入参即判别量、可证明单射」时请用 <see cref="M:RUIF.TexCache.KeyOf(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)"/>。</para>
+            
+             <para>返回值清掉最高位 ⇒ 与 <see cref="M:RUIF.TexCache.KeyOf(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)"/>（最高位恒 1）的键空间<b>严格隔离</b>。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TexCache.KeyVersioned(System.Int32,System.Int32,System.Int32,System.Int32)">
+             <summary>
+             由 (kind, 数据版本, 尺寸) 生成键 —— 用于"内容会变"的画布（热力图/图表）。
+            
+             <para><b>⛔ 2026-09-13 修正</b>：原实现 <c>version &lt;&lt; 20</c> 与 <c>h &lt;&lt; 42</c>、<c>w &lt;&lt; 52;</c>
+             的位段<b>在 <c>version ≥ 2^22</c> 时重叠</b>（约 419 万；用时间戳/哈希当 version 就会踩到）。
+             改哈希后无此上限。返回值同样清掉最高位以与 <see cref="M:RUIF.TexCache.KeyOf(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)"/> 隔离。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TexCache.Hash64(System.Int64,System.Int64)">
+            <summary>FNV-1a 风格的 64 位混合（零分配）。</summary>
+        </member>
+        <member name="M:RUIF.TexCache.KeyData(System.Int32,System.Int64,System.Int32,System.Int32,System.Int32)">
+             <summary>
+             结构化键（**长载荷版**）：给「大指纹 + 少量参数」的场景 —— 典型是**图表的数据哈希**
+             （值数组的指纹远超 <see cref="M:RUIF.TexCache.KeyOf(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)"/> 的 11 位槽）。
+            
+             <para><paramref name="dataHash"/> 由调用方算（如对量化后的值做 FNV-1a）——
+             **数据变则键变**，因此调用方**不需要**额外维护版本号，也就不会出现「数据变了但复用旧贴图」的静默错误。</para>
+            
+             <para><paramref name="a"/>/<paramref name="b"/>/<paramref name="c"/> **无取值范围限制**（走哈希而非位段拼接）。
+             返回值清最高位 ⇒ 与 <see cref="M:RUIF.TexCache.KeyOf(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)"/>（最高位恒 1）严格隔离。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TexCache.KeyOf(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)">
+             <summary>
+             <b>结构化缓存键构造器（推荐）</b> —— 由若干「判别参数」直接生成键，
+             <b>调用方不需要知道位段布局，也不需要自己拼位</b>。
+            
+             <para><b>为什么要有它</b>：<see cref="M:RUIF.TexCache.Key(System.Int32,UnityEngine.Color,UnityEngine.Color,System.Int32,System.Int32)"/> / <see cref="M:RUIF.TexCache.KeyVersioned(System.Int32,System.Int32,System.Int32,System.Int32)"/> 用位段拼接，
+             各自带静默陷阱 —— <c>kind</c> 被 <c>&amp; 0xFF</c> 截断；<c>version</c> 左移 20 与 <c>w/h</c>
+             位段在 <c>version ≥ 2^22</c> 时重叠；<c>w</c> 左移 60 在大尺寸下溢出。
+             调用方一旦手拼，就可能「**算了某个判别量却忘了放进键**」——
+             编译器不报、逻辑上又像做了处理，只在运行期表现为「两张不同的图共用同一张贴图」。
+             （2026-09-13 实证事故：<c>DonutChart</c> 算出孔洞比却没传进键 ⇒ 饼图取到环图贴图、中间带孔。）</para>
+            
+             <para><b>位段</b>（共 64 位，段间不重叠）：
+             <c>[63] = 标记位（恒 1）</c>，<c>kind[0..7]</c>，<c>a/b/c/d/e</c> 各 <c>[11 位]</c>。
+             即 <paramref name="kind"/> ∈ [0,255]，<paramref name="a"/>…<paramref name="e"/> ∈ [0,2047]。
+             <b>标记位保证本构造器产出的键与旧的 <see cref="M:RUIF.TexCache.Key(System.Int32,UnityEngine.Color,UnityEngine.Color,System.Int32,System.Int32)"/> / <see cref="M:RUIF.TexCache.KeyVersioned(System.Int32,System.Int32,System.Int32,System.Int32)"/> 永不撞键。</b></para>
+            
+             <para><b>越界不静默</b>：任何入参越界都会被夹紧，并 <c>Log.ErrorOnce</c> 报一次
+             （提示改用更小的量化步长或扩展位段）—— 绝不悄悄丢位。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TexCache.Seg(System.String,System.Int32,System.Int32)">
+            <summary>11 位位段取值：越界夹紧 + 只报一次日志（绝不静默丢位）。</summary>
+        </member>
+        <member name="M:RUIF.TexCache.KeySector(UnityEngine.Color,System.Single,System.Single,System.Single,System.Int32)">
+             <summary>
+             <b>扇区贴图键</b>（<c>Charts.DonutChart</c> / 仪表圆弧等）：色值 + 起角 + 张角 + 孔洞比 + 边长。
+            
+             <para><b>色值直接进键（不是调色板序号）</b> ⇒ <b>主题切换后键自动变化、缓存自动失效</b>，
+             调用方不必记得调 <c>TexCache.Clear()</c>。（原实现传序号，换主题后会一直画旧色。）</para>
+            
+             <para>角度量化到 <b>1°</b> —— 环形图上肉眼不可见，但能让动画数据也命中缓存。
+             五个判别量全部进键，与「孔洞比不同 ⇒ 键必须不同」直接对应（2026-09-13 事故的对策）。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TexCache.FoldColor(UnityEngine.Color)">
+            <summary>把 RGBA 折叠成 11 位（供 <see cref="M:RUIF.TexCache.KeyOf(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)"/> 的位段用）。6 色调色板内无误撞风险。</summary>
+        </member>
+        <member name="M:RUIF.TexCache.TryGet(System.Int64,UnityEngine.Texture2D@)">
+            <summary>查缓存；命中且贴图存活返回 true。</summary>
+        </member>
+        <member name="M:RUIF.TexCache.Publish(System.Int64,System.Int32,System.Int32,UnityEngine.Color32[],System.String)">
+            <summary>发布像素缓冲为贴图并登记缓存（长度须为 w*h）。主线程外调用会被拒并返回 null。</summary>
+        </member>
+        <member name="M:RUIF.TexCache.Clear">
+            <summary>清空缓存并释放贴图（切换存档 / 主题时可用）。</summary>
+        </member>
+        <member name="T:RUIF.TexFmt">
+             <summary>
+             L0 · 贴图像素缓冲的<b>纯计算层</b>：只做数组运算，不创建任何 Unity 宿主对象
+             ⇒ 可离线单测（传进 w/h 与颜色，断言像素值），符合框架「Fmt = 纯计算」分层约定。
+            
+             <para><b>存在理由（第二轮取证结论）</b>：原版 UI 侧<b>没有</b>渐变 API、<b>没有</b>多边形填充 API
+             （全类型表检索 <c>Gradient</c> 仅命中 <c>Verse.Noise.GradientPresets</c>，属地形噪声）。
+             而原版自己造贴图是有先例的 —— <c>SolidColorMaterials.NewSolidColorTexture</c> 内部即
+             <c>new Texture2D(2,2)</c> + <c>SetPixel×4</c> + <c>Apply()</c>。
+             因此「真渐变 / 真渐隐 / 热力图 / 饼环 / 桑基」的统一解是：**本层算像素 → TexCache 上屏**。</para>
+            
+             <para><b>坐标约定</b>：Unity <c>Texture2D</c> 的像素 (0,0) 在<b>左下角</b>。
+             因此 <see cref="M:RUIF.TexFmt.VGradient(System.Int32,UnityEngine.Color,UnityEngine.Color)"/> 的 <c>top</c> 参数写到缓冲的<b>末行</b>；上屏时若发现上下颠倒，
+             是此处语义被误用，而非绘制端问题。</para>
+            
+             <para><b>数学只用 <c>System.Math</c></b>：<c>Mathf</c> 的部分成员经 ECall 实现，
+             在非 Unity 宿主（离线单测）会抛异常（本框架 ECall 铁律同源）。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TexFmt.Index(System.Int32,System.Int32,System.Int32)">
+            <summary>缓冲下标（行主序，y=0 为纹理底部）。</summary>
+        </member>
+        <member name="M:RUIF.TexFmt.Solid(System.Int32,System.Int32,UnityEngine.Color)">
+            <summary>整幅纯色缓冲。</summary>
+        </member>
+        <member name="M:RUIF.TexFmt.HGradient(System.Int32,UnityEngine.Color,UnityEngine.Color)">
+            <summary>水平线性渐变（x=0 取 <paramref name="left"/>，x=w-1 取 <paramref name="right"/>）。</summary>
+        </member>
+        <member name="M:RUIF.TexFmt.VGradient(System.Int32,UnityEngine.Color,UnityEngine.Color)">
+            <summary>垂直线性渐变（缓冲末行 = <paramref name="top"/>，首行 = <paramref name="bottom"/>）。</summary>
+        </member>
+        <member name="M:RUIF.TexFmt.AlphaFade(System.Int32,UnityEngine.Color,System.Single,System.Single)">
+            <summary>alpha 渐隐带（水平；用于 OverflowFade 的真·渐隐遮罩）。保留 RGB 只改 A。</summary>
+        </member>
+        <member name="M:RUIF.TexFmt.Ramp(UnityEngine.Color,UnityEngine.Color,System.Single)">
+            <summary>线性插值（t 自动 clamp01）。</summary>
+        </member>
+        <member name="M:RUIF.TexFmt.Heat(System.Single)">
+            <summary>
+            五档离散色阶（值 → 色）—— 热力图/阈值条的共用色阶。
+            <para>用<b>离散档</b>而非连续插值：一是快（省一次插值），二是原版色感本来就是"档"，
+            三是连续渐变在低分屏上会出现肉眼可见的条带。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.TexFmt.FillRect(UnityEngine.Color32[],System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,UnityEngine.Color)">
+            <summary>矩形填充（缓冲坐标系，左闭右开；自动裁到边界）。</summary>
+        </member>
+        <member name="M:RUIF.TexFmt.FillDisc(UnityEngine.Color32[],System.Int32,System.Int32,System.Single,System.Single,System.Single,System.Single,UnityEngine.Color)">
+            <summary>
+            椭圆填充（<paramref name="rx"/>/<paramref name="ry"/> 为像素半径）。
+            <para><b>抗锯齿</b>：边缘 1px 做覆盖率软过渡（<see cref="M:RUIF.TexFmt.Coverage(System.Single,System.Single,System.Single)"/>），
+            这是"自绘圆看起来不像原版"最常见的根因 —— 硬边圆在像素栅格上会有明显阶梯。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.TexFmt.FillSector(UnityEngine.Color32[],System.Int32,System.Int32,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,UnityEngine.Color)">
+            <summary>
+            扇环填充（饼图 / 环图共用）——
+            <paramref name="startDeg"/> 起角、<paramref name="sweepDeg"/> 张角（度，逆时针为正，0° = 正右），
+            <paramref name="inner01"/> 内半径占比（0 = 饼，&gt;0 = 环）。
+            </summary>
+        </member>
+        <member name="M:RUIF.TexFmt.Line(UnityEngine.Color32[],System.Int32,System.Int32,System.Single,System.Single,System.Single,System.Single,UnityEngine.Color,System.Single)">
+             <summary>
+             把一条**任意角度线段**画进像素缓冲（距离场抗锯齿，与 <see cref="M:RUIF.TexFmt.Coverage(System.Single,System.Single,System.Single)"/> 同风格）。
+            
+             <para><b>⛔ 为什么必须用它替代原版的 <c>Widgets.DrawLine</c>（2026-09-13 根因修复）</b>：
+             后者内部是 <c>GL.PushMatrix / GL.MultMatrix / GL.PopMatrix</c> —— 改的是 <b>GL 矩阵</b>，
+             而 <c>GUI.matrix</c>（含滚动视图的平移）**不会被 GL 矩阵感知** ⇒
+             **在滚动视图内位置全错（元素「飞散」）**。本方法把线段在 **CPU 上算进像素缓冲**，
+             调用方再用一次 <c>GUI.DrawTexture</c>（或 <see cref="M:RUIF.TexAtoms.Canvas(UnityEngine.Rect,System.Int64,System.Int32,System.Int32,UnityEngine.Color32[],System.String)"/>）绘制
+             ⇒ <b>零矩阵、零 GL 依赖</b>，在任何坐标上下文内都正确。</para>
+            
+             <para><paramref name="x0"/>…<paramref name="y1"/> 与 <paramref name="buf"/> **同一坐标系**
+             （贴图局部像素坐标：通常先用 <c>rect</c> 减去贴图原点、再乘「像素/点」缩放）。
+             超出缓冲的部分自动裁剪。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TexFmt.Polyline(UnityEngine.Color32[],System.Int32,System.Int32,System.Single[],System.Single[],UnityEngine.Color,System.Single)">
+            <summary>
+            折线：逐段调用 <see cref="M:RUIF.TexFmt.Line(UnityEngine.Color32[],System.Int32,System.Int32,System.Single,System.Single,System.Single,System.Single,UnityEngine.Color,System.Single)"/>（<paramref name="xs"/> 与 <paramref name="ys"/> 等长取短）。
+            <para>⚠ 相邻段在**接缝处会叠加混合** —— 不透明色无影响；**半透明色会在拐点略深**。
+            需要严格一致的半透明折线时，应改为「一次性距离场（对所有段取最小距离）后再混合」。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.TexFmt.Coverage(System.Single,System.Single,System.Single)">
+            <summary>
+            边缘覆盖率：<c>d</c> 为归一化距离（1 = 边界）。
+            返回 [0,1]，边界处 0.5px 过渡带 ⇒ 简易抗锯齿。
+            </summary>
+        </member>
+        <member name="M:RUIF.TexFmt.Blend(UnityEngine.Color32,UnityEngine.Color,System.Single)">
+            <summary>按覆盖率把 <paramref name="src"/> 叠到 <paramref name="dst"/> 上（src 自身 alpha 参与）。</summary>
         </member>
         <member name="T:RUIF.Tokens">
             <summary>
@@ -431,6 +801,317 @@
         <member name="P:RUIF.Grid.Index">
             <summary>已取格数（调试用）。</summary>
         </member>
+        <member name="T:RUIF.ButtonTone">
+             <summary>
+             按钮语义色调（方案 §3.3 / §3.4）—— <see cref="T:RUIF.Tokens"/> 之上的<b>语义别名层</b>，
+             <b>不是颜色真源、不是独立取值</b>。
+            
+             <para><see cref="F:RUIF.ButtonTone.Default"/> 与 <see cref="F:RUIF.ButtonTone.Accent"/> 同映射 <see cref="F:RUIF.Tokens.Accent"/>；
+             <see cref="F:RUIF.ButtonTone.Danger"/> → <see cref="F:RUIF.Tokens.Dead"/>；<see cref="F:RUIF.ButtonTone.Warn"/> → <see cref="F:RUIF.Tokens.Warn"/>。
+             与 <see cref="T:RUIF.InputState"/> <b>正交</b>：危险态是 tone 旁路，<b>不新增第 7 态</b>（避免状态爆炸）。
+             因颜色仍全部经 <see cref="T:RUIF.Tokens"/>，本层不破「禁 <c>new Color</c>、禁裸 <c>GUI.color</c>」红线。</para>
+             </summary>
+        </member>
+        <member name="F:RUIF.ButtonTone.Default">
+            <summary>默认（观感同 <see cref="F:RUIF.ButtonTone.Accent"/>，映射 <see cref="F:RUIF.Tokens.Accent"/>）。</summary>
+        </member>
+        <member name="F:RUIF.ButtonTone.Accent">
+            <summary>强调 / 主操作（映射 <see cref="F:RUIF.Tokens.Accent"/>）。</summary>
+        </member>
+        <member name="F:RUIF.ButtonTone.Danger">
+            <summary>危险 / 破坏性操作（映射 <see cref="F:RUIF.Tokens.Dead"/>）。</summary>
+        </member>
+        <member name="F:RUIF.ButtonTone.Warn">
+            <summary>警告 / 注意（映射 <see cref="F:RUIF.Tokens.Warn"/>）。</summary>
+        </member>
+        <member name="T:RUIF.ButtonFit">
+            <summary>
+            按钮落位档（方案 §5.6 单按钮降级阶梯 D0/D1/D6 的纯计算结果）。
+            <para>D2（仅图标）不在本枚举内：本批冻结签名里的按钮要么<b>只带文字标签</b>（<c>PrimaryButton</c> /
+            <c>ToggleButton</c>）、要么<b>只带字形</b>（<c>IconButton</c>）—— 「图标 + 文字」组合不存在，
+            故「藏文字」与 D0 的「图标 + 文字」项在本批不可达（已回报主理人）。</para>
+            </summary>
+        </member>
+        <member name="F:RUIF.ButtonFit.Full">
+            <summary>D0 / D3：完整标签。</summary>
+        </member>
+        <member name="F:RUIF.ButtonFit.Ellipsis">
+            <summary>D1：省略号标签（调用方须补完整悬停提示）。</summary>
+        </member>
+        <member name="F:RUIF.ButtonFit.Placeholder">
+            <summary>D6：省略该件，画「—」占位。</summary>
+        </member>
+        <member name="T:RUIF.ButtonPlan">
+            <summary>
+            落位计划（<see cref="M:RUIF.ButtonFmt.Plan(System.Single,System.Single)"/> 的返回值）。
+            <b>纯值类型</b> ⇒ 热路径零堆分配（方案 A9）。
+            </summary>
+        </member>
+        <member name="F:RUIF.ButtonPlan.Fit">
+            <summary>落位档。</summary>
+        </member>
+        <member name="F:RUIF.ButtonPlan.PadX">
+            <summary>内容区水平内边距（D0/D1 = 8f；D3 = 4f，<b>不得归零</b>）。</summary>
+        </member>
+        <member name="T:RUIF.ButtonFmt">
+             <summary>
+             按钮族的<b>纯计算层</b>（方案 §3.5「状态机 / tone→Tokens | 纯函数 ButtonFmt（可离线单测）」）。
+            
+             <para>与 <see cref="T:RUIF.InputFmt"/> 同风范：<b>只做 state → 令牌映射与阈值判定，不触任何引擎状态</b>
+             ⇒ 可在无 Unity 宿主的离线单测里断言（<c>Tests/</c> 由质量部负责）。</para>
+            
+             <para><b>⛔ 不在本类出现 <c>new Color</c> / 裸 <c>GUI.color</c></b>：一切取色都经 <see cref="T:RUIF.Tokens"/>
+             与 <see cref="M:RUIF.Draw.WithAlpha(UnityEngine.Color,System.Single)"/>；<see cref="T:RUIF.ButtonTone"/> 只是语义别名。</para>
+             </summary>
+        </member>
+        <member name="F:RUIF.ButtonFmt.FullWidthPad">
+            <summary>
+            D0「完整标签」的宽度加宽量（32f）。
+            <para>出处：§5.6「<c>w ≥ Measure.Width(label, FontLabel) + 32f</c>（32 = PadX 8×2 + icon 18 + Gap 6）」。
+            本批按钮无「图标 + 文字」组合，但<b>仍按冻结阈值逐值取 32f</b> —— 阈值与方案 1:1，避免门禁比对时出现
+            第二套数字（代价仅是省略号提前约 16f 触发，无观感损失）。</para>
+            </summary>
+        </member>
+        <member name="F:RUIF.ButtonFmt.MinUsableWidth">
+            <summary>D6 阈值（28f）：宽度不足此值 ⇒ 省略该件，画「—」占位（§5.6）。</summary>
+        </member>
+        <member name="F:RUIF.ButtonFmt.EllipsisFloorWidth">
+            <summary>D1 / D2 / D3 的分界宽度（48f，§5.6）。</summary>
+        </member>
+        <member name="F:RUIF.ButtonFmt.NarrowPadX">
+            <summary>D3 收窄后的内容内边距（4f，下限，<b>不得归零</b>，§5.6）。</summary>
+        </member>
+        <member name="F:RUIF.ButtonFmt.FocusRingAlpha">
+            <summary>焦点环透明度（0.55f；与既有 <c>InputAtoms.StateSample</c> 逐值一致，§5.5）。</summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.Tone(RUIF.ButtonTone)">
+            <summary>
+            tone → 语义色。<b>唯一映射点</b>：<c>Default|Accent → Tokens.Accent</c> ·
+            <c>Danger → Tokens.Dead</c> · <c>Warn → Tokens.Warn</c>（§3.3 / §5.3）。
+            </summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.ToneSoft(RUIF.ButtonTone)">
+            <summary>tone 的低透明度变体（<c>Draw.WithAlpha(Tone, 0.16f)</c>）—— 按下 / 选中底的填充色（§5.3）。</summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.FocusRingColor(RUIF.ButtonTone)">
+            <summary>焦点环颜色（<c>Draw.WithAlpha(Tone, 0.55f)</c>，§5.5）。</summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.Resolve(System.Boolean,System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            收集状态（禁用优先，沿用 <see cref="M:RUIF.InputFmt.Resolve(System.Boolean,System.Boolean,System.Boolean,System.Boolean)"/> 的既有优先级）。
+            <para><b>⚠ <see cref="F:RUIF.InputState.Focused"/> 不由本方法产出</b>：方案 §3.4 明确
+            <c>InputFmt.Resolve(hovered, pressed, selected, enabled)</c> <b>不加 focused 参数</b>
+            （加了 = SemVer 破坏 + 会误产生该态）。焦点态由调用方在命中调用后自行叠加（见 <see cref="T:RUIF.ButtonAtoms"/>）。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.Channels(RUIF.InputState,RUIF.ButtonTone,UnityEngine.Color@,UnityEngine.Color@,UnityEngine.Color@,UnityEngine.Color@)">
+             <summary>
+             6 态 × tone → 四通道取色（方案 §5.3 表格<b>逐格</b>实现；Default tone 列 100% 复现既有
+             <c>InputAtoms.StateSample</c>，无「同一状态两套配色」）。
+            
+             <para>要点：① <see cref="F:RUIF.InputState.Disabled"/> <b>优先于一切</b>且<b>剥除 tone</b>（危险钮禁用后不得再显红边）；
+             ② <see cref="F:RUIF.ButtonTone.Danger"/>/<see cref="F:RUIF.ButtonTone.Warn"/> 只改<b>描边 + 文字/图标</b>，
+             <b>fill 不染色</b>（危险感来自边框与字，不来自红底）。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.Clicked(System.Boolean,System.Boolean)">
+             <summary>
+             命中后的最终判定：<b>事后 AND</b>。
+            
+             <para><b>⛔ 调用方必须先无条件调用命中 API、再调本方法</b> —— 不得写成
+             <c>enabled &amp;&amp; Widgets.ButtonInvisible(...)</c> 的短路形式：短路会在 <c>enabled</c> 跨帧变化时<b>跳号</b>
+             （<c>GUI.Button</c> 的 control-ID 序被打乱）⇒ hot/active 控件错配、丢点击。
+             这是<b>有意偏离</b> vanilla <c>CustomButtonText</c> 的 <c>active &amp;&amp; …</c> 短路由（该处无跨帧 ID 依赖，故安全），
+             已登记为偏离而非疏漏。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.ShouldRing(System.Boolean,System.Boolean)">
+            <summary>是否画焦点环：<paramref name="focusRing"/>（调用方显式）或按名查询命中（键盘通路）。二者可独立、可并用。</summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.FocusRingRect(UnityEngine.Rect)">
+            <summary>
+            焦点环几何：外扩 2px → <b>过 <see cref="M:RUIF.Px.Snap(UnityEngine.Rect)"/></b>（xMin/yMin floor、xMax/yMax ceil）。
+            <para>为什么必须过 Px：UI 缩放 &gt;1 时外扩 2px 会落半像素 ⇒ 1px 环被双线性插值糊成 2px 灰边（§5.5）。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.ButtonFmt.Plan(System.Single,System.Single)">
+             <summary>
+             单按钮落位计划（§5.6 D0/D1/D3/D6）。
+            
+             <para><b>阈值必须由调用方按 <c>Measure.Width(label, Tokens.FontLabel)</c> 实测后传入</b> ——
+             本方法<b>不接受字符数估算</b>（Tiny 下拉丁 80f ≈ 10 字符，<b>CJK 80f ≈ 3 字</b>）。
+             本方法本身是纯函数（只做区间判定）⇒ 可离线单测。</para>
+             </summary>
+             <param name="width">控件可用宽度（字面值，不做任何假设）。</param>
+             <param name="labelWidth"><c>Measure.Width(label, Tokens.FontLabel)</c> 的实测结果。</param>
+        </member>
+        <member name="T:RUIF.ButtonAtoms">
+             <summary>
+             B1 · 按钮族（方案 §5.4 / §5.3）：<see cref="M:RUIF.ButtonAtoms.PrimaryButton(UnityEngine.Rect,System.String,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)"/> / <see cref="M:RUIF.ButtonAtoms.ToggleButton(UnityEngine.Rect,System.String,System.Boolean@,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)"/> / <see cref="M:RUIF.ButtonAtoms.IconButton(UnityEngine.Rect,System.String,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)"/>。
+            
+             <para><b>参照锚</b>：vanilla <c>Widgets.CustomButtonText</c>（原版自己的全自绘按钮实现）= 自绘底/边/字 + 自带命中。
+             本族是它的<b>令牌化等价物 + 音效门控修正</b>，<b>不是新范式</b>。</para>
+            
+             <para><b>三条不可协商的实现纪律</b>：
+             ① 禁用态 <b>100% 自绘</b>（不依赖原版 <c>active</c>、<b>不置 <c>GUI.enabled=false</c></b>）；
+             ② 命中<b>总是调用 + 事后 AND</b>（见 <see cref="M:RUIF.ButtonFmt.Clicked(System.Boolean,System.Boolean)"/>）；
+             ③ <c>controlName != null</c> 时 <c>SetNextControlName</c> 与命中调用<b>紧邻</b>（中间不得夹其他控件创建，§6 硬约束 ①）。</para>
+            
+             <para><b>零状态</b>：全部交互值由调用方持有（<c>ref</c>）或由引擎查询，组件内<b>无任何 <c>static</c> 可变字段</b>。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ButtonAtoms.FocusRing(UnityEngine.Rect,RUIF.ButtonTone)">
+            <summary>
+            单一<b>焦点环画法</b>（§5.5）—— 按钮族与选择件<b>共用</b>，禁止另造第二套。
+            </summary>
+            <param name="scope">环所覆盖的作用域（按钮族 = <c>rect</c> 本身；选择件 = <b>整行可点区</b>）。</param>
+            <param name="tone">语义色调（决定环色）。</param>
+        </member>
+        <member name="M:RUIF.ButtonAtoms.PrimaryButton(UnityEngine.Rect,System.String,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)">
+            <summary>
+            实心按钮（主操作 / 普通操作）。返回是否被点击。
+            </summary>
+            <param name="rect">按钮矩形（调用方须预留 <b>≥2px 外边</b>，否则焦点外环被邻件遮盖，§5.5）。</param>
+            <param name="label">标签文案（<b>调用方须自行 <c>Tr.Get</c></b>；组件内不内置英文默认串）。</param>
+            <param name="enabled">是否可用。禁用时<b>不产生事件、不消费事件、不响悬停音</b>，并 100% 自绘灰化。</param>
+            <param name="tone">语义色调（危险钮禁用后<b>剥除红边</b>）。</param>
+            <param name="focusRing">强制画焦点环（供调用方自建导航时显式告知）。</param>
+            <param name="controlName">键盘通路名（<c>null</c> = 不登记）；按名焦点命中时<b>自动画环</b>。</param>
+        </member>
+        <member name="M:RUIF.ButtonAtoms.ToggleButton(UnityEngine.Rect,System.String,System.Boolean@,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)">
+            <summary>
+            二态切换按钮（<b>按钮外形 + 自带文字标签</b>；与拨杆形 <c>InputAtoms.ToggleSwitch</c>、纯图标 <c>InteractAtoms.ToolbarIcon</c> 三者判别见方案 §3.2）。
+            </summary>
+            <returns><b>是否发生变化</b>（§5.4 ② 勘误后口径）—— 与 <c>ToggleSwitch</c> / <c>Segmented</c> / 选择件族同向统一；
+            切换后的<b>新值从 <paramref name="on"/> 读</b>（<c>ref</c> 传入，返回值不携带该信息）。</returns>
+            <param name="rect">按钮矩形（预留 ≥2px 外边）。</param>
+            <param name="label">标签文案（调用方自行 <c>Tr.Get</c>）。</param>
+            <param name="on">二态值，由调用方持有（组件零状态）。选中态 = <see cref="F:RUIF.InputState.Selected"/> 行。</param>
+            <param name="enabled">是否可用（禁用时不产生状态变更、不消费事件）。</param>
+            <param name="tone">语义色调。</param>
+            <param name="focusRing">强制画焦点环。</param>
+            <param name="controlName">键盘通路名（<c>null</c> = 不登记）。</param>
+        </member>
+        <member name="M:RUIF.ButtonAtoms.IconButton(UnityEngine.Rect,System.String,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)">
+            <summary>
+            图标按钮（<b>仅字形</b>：工具栏密排 / 底栏图标）。
+            <para>字形限 <b>BMP、非 emoji</b> 的几何/符号（方案 §5.9 字形可用范围）；⛔ 不得用英文单词冒充图标。</para>
+            </summary>
+            <param name="rect">按钮矩形（标准图标钮本体 28×28，底栏 32×32 —— 由调用方按 §5.9 决定）。</param>
+            <param name="glyph">单个字形（调用方自行 <c>Tr.Get</c> 或取自定义表）。</param>
+            <param name="enabled">是否可用。</param>
+            <param name="tone">语义色调（字形 <c>Muted → Tone</c>）。</param>
+            <param name="focusRing">强制画焦点环。</param>
+            <param name="controlName">键盘通路名（<c>null</c> = 不登记）。</param>
+        </member>
+        <member name="M:RUIF.ButtonAtoms.PressedNow">
+            <summary>
+            按住态探针（<b>全族唯一实现</b>）：鼠标在控件内且左键正按下 / 拖拽。
+            <para>红线段：一律 <c>Mouse.IsOver</c>（含窗口与滚动区门禁），不用裸 <c>rect.Contains(mousePos)</c>；
+            一律 <c>Event.current</c>（<c>InputLegacyModule</c> 不在引用白名单，写 <c>Input.*</c> 编译不过）。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.ButtonAtoms.ApplyFocusOverlay(UnityEngine.Rect,RUIF.ButtonTone,RUIF.InputState,System.Boolean,System.Boolean,System.String)">
+            <summary>
+            焦点态叠加（§5.3 Focused 行 + §5.5 环）：<b>描边改 Tone + 画外环</b>；fill / text 沿用已画内容
+            （Hover 行描边本就是 Tone，Selected / Pressed 行的 text 本就是 Tone ⇒ 叠加无冲突，不会覆盖出第三套配色）。
+            <para><b>Disabled 优先于一切</b>：禁用件即便被授予焦点名也<b>不画环、不改边</b>（§5.3）。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.ButtonAtoms.DrawTextContent(UnityEngine.Rect,System.String,UnityEngine.Color)">
+            <summary>标签绘制（按 §5.6 实测阈值走 D0 / D1 / D6；<b>只走单行 + 省略，禁自动折行</b>）。</summary>
+        </member>
+        <member name="T:RUIF.ChartCandAtoms">
+             <summary>⑧ 图表候选组件（原 📋，官方实证支持，现落地）：直方图 / 雷达 / 甘特 / 桑基 / 箱线 /
+             漏斗 / 瀑布 / 气泡 / 阶梯线 / 区间带 / K线 / SPC 控制图 / Pareto 排列图。纯 presentational，数据由调用方传入；
+             任意方向连线用官方 <c>Widgets.DrawLine</c>，轴/基线用 <c>Draw.LineH/LineV</c>。
+             基础 10 件（Sparkline/Bar/Stacked/Line/Area/Donut/Pie/Scatter/HeatmapGrid）已在 <c>Charts</c> 落地，不重复。
+            
+             <para><b>绘制路径分配铁律（2026-09-16 收紧）</b>：本文件所有组件在绘制路径上
+             <b>零委托对象 / 零闭包 / 零临时数组</b> ——
+             ① 数据范围一律<b>单趟扫描</b>（<see cref="M:RUIF.ChartCandAtoms.ScanBubble(RUIF.ChartCandAtoms.BubblePt[],System.Single@,System.Single@,System.Single@,System.Single@)"/> / <see cref="M:RUIF.ChartCandAtoms.ScanRange(RUIF.ChartCandAtoms.RangePt[],System.Single@,System.Single@,System.Single@,System.Single@)"/>），
+                不再用 <c>Array.ConvertAll</c>（那会每帧 <c>new float[]</c>）；
+             ② 坐标映射一律走<b>无捕获私有静态函数</b> <see cref="M:RUIF.ChartCandAtoms.MapX(System.Single,System.Single,System.Single,UnityEngine.Rect)"/> / <see cref="M:RUIF.ChartCandAtoms.MapY(System.Single,System.Single,System.Single,UnityEngine.Rect)"/>，
+                不再用捕获 <c>p/x0/x1</c> 的 <c>Func&lt;float,float&gt;</c> 闭包。
+             有意的例外：<see cref="M:RUIF.ChartCandAtoms.Radar(UnityEngine.Rect,System.Single[][],System.String[])"/> 的 <c>Widgets.DrawLine</c> 与 <c>Draw.Box</c> 本身的行内参数。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ChartCandAtoms.MapX(System.Single,System.Single,System.Single,UnityEngine.Rect)">
+             <summary>
+             数据 x → 绘图区 x。<b>无捕获静态函数</b>。
+            
+             <para><b>为什么替掉原来的 <c>Func&lt;float,float&gt; X = v =&gt; ...</c></b>：那是<b>捕获闭包</b>
+             （捕获 <c>p / x0 / x1</c>）⇒ 每次组件调用都要新建一个委托对象 + 一个编译器生成的显示类实例，
+             全部进 GC。静态函数传参版本**零委托、零闭包对象**，语义逐字等价。</para>
+            
+             <para><b>可见性为 <c>internal</c>（而非 <c>private</c>）</b>：它是可离线断言的纯函数
+             （零 GUI / 零引擎调用），<c>Tests/ChartCandAllocTests.cs</c> 需用它钉住"NaN 输入不产生 NaN 几何"。
+             只到 <c>RUIF.Tests</c>（<c>InternalsVisibleTo</c>），<b>不进公共 API 面</b>。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ChartCandAtoms.MapY(System.Single,System.Single,System.Single,UnityEngine.Rect)">
+             <summary>
+             数据 y → 绘图区 y（上下翻转，y 向下为正）。<b>无捕获静态函数</b>。
+            
+             <para><b>顺带收益（写在这里作为"牺牲 <c>Func</c> 可读性"的理由）</b>：原 <c>Y(v)</c>
+             每调用一次重算<b>两次除法</b>；而 BoxPlot / Ohlc / Spc / RangeArea 里同一个 <c>v</c>
+             常被调用 3~4 次。改静态函数后调用点可先落局部变量复用 ⇒ <b>除法次数减少 60% 以上</b>
+             （如 <see cref="M:RUIF.ChartCandAtoms.BoxPlot(UnityEngine.Rect,RUIF.ChartCandAtoms.BoxStats[])"/> 现为 min/max/q1/q3/median 各一次）。</para>
+            
+             <para><b>可见性 <c>internal</c> 的理由同 <see cref="M:RUIF.ChartCandAtoms.MapX(System.Single,System.Single,System.Single,UnityEngine.Rect)"/>。</b></para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ChartCandAtoms.ScanFallback(System.Single@,System.Single@)">
+            <summary>全 NaN / 未采到任何有效值（<c>lo &gt; hi</c>）时的单位区间回退。</summary>
+        </member>
+        <member name="M:RUIF.ChartCandAtoms.ScanBubble(RUIF.ChartCandAtoms.BubblePt[],System.Single@,System.Single@,System.Single@,System.Single@)">
+             <summary>
+             单趟扫描求气泡段的 [x0,x1]×[y0,y1]，写入 4 个 out 参数。
+            
+             <para><b>替代</b>：原实现 <c>ChartCandFmt.Min(Max)(Array.ConvertAll(...))</c> ×4
+             （<c>:224-227</c>）⇒ 每帧 4 个临时 <c>float[]</c>。单趟扫描<b>零分配</b>，
+             范式抄本文件已有的 <see cref="M:RUIF.ChartCandAtoms.StepLine(UnityEngine.Rect,UnityEngine.Vector2[])"/> / <see cref="M:RUIF.ChartCandAtoms.Ohlc(UnityEngine.Rect,RUIF.ChartCandAtoms.OhlcBar[])"/> 扫描写法。</para>
+            
+             <para><b>⚠ 语义变更（已登记，见 <c>Tests/ChartCandAllocTests.cs</c>）</b>：
+             旧路径是 <c>ChartCandFmt.Min/Max(Array.ConvertAll(...))</c>，而 <c>ChartCandFmt.Min/Max</c>
+             自身是 <c>if (v[i] &lt; m)</c> 扫描 —— 它<b>并不</b>传播 NaN（会传播 NaN 的是 <c>Mathf.Min/Max</c>，
+             本文件未用）。真实的差异在<b>首元素</b>：旧实现以 <c>m = v[0]</c> 为种子 ⇒
+             <b>首元素为 NaN 时整个范围被污染</b>（整图几何全 NaN）；新扫描以
+             <c>±MaxValue/MinValue</c> 为哨兵 ⇒ 首元素为 NaN 亦被忽略。
+             全 NaN / 空集时退回单位区间 [0,1]，保证不产生 NaN 几何。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ChartCandAtoms.ScanRange(RUIF.ChartCandAtoms.RangePt[],System.Single@,System.Single@,System.Single@,System.Single@)">
+            <summary>单趟扫描求区间带段的 [x0,x1]×[y0,y1]（y 取各点 lo 的下界、hi 的上界）。
+            分配事实与语义变更同 <see cref="M:RUIF.ChartCandAtoms.ScanBubble(RUIF.ChartCandAtoms.BubblePt[],System.Single@,System.Single@,System.Single@,System.Single@)"/>（原为 <c>:267-270</c> 的 4 次 <c>Array.ConvertAll</c>）。</summary>
+        </member>
+        <member name="M:RUIF.ChartCandAtoms.RadarPt(UnityEngine.Vector2,System.Single,System.Int32,System.Single,System.Int32)">
+             <summary>
+             雷达图顶点：中心 <paramref name="c"/>、半径 <paramref name="rad"/>、<paramref name="n"/> 条轴、
+             第 <paramref name="i"/> 条轴、系数 <paramref name="f"/>（0 = 圆心，1 = 顶点）。
+            
+             <para>原为两个捕获 <c>c / rad / n</c> 的 <c>Func</c>（<c>ang</c> 与 <c>at</c>），
+             每次 <see cref="M:RUIF.ChartCandAtoms.Radar(UnityEngine.Rect,System.Single[][],System.String[])"/> 调用都新建委托 + 显示类 ⇒ 改<b>无捕获私有静态函数</b>（零委托）。</para>
+             </summary>
+        </member>
+        <member name="T:RUIF.ChartCandFmt">
+            <summary>⑧ 图表候选组件的纯计算（可离线单测）。</summary>
+        </member>
+        <member name="M:RUIF.ChartCandFmt.SeriesColor(System.Int32)">
+            <summary>序列配色（循环调色板）。</summary>
+        </member>
+        <member name="M:RUIF.ChartCandFmt.BandColor(System.Single)">
+            <summary>阈值着色（复用 TableFmt 三档）。</summary>
+        </member>
+        <member name="M:RUIF.ChartCandFmt.Min(System.Single[])">
+            <summary>数组最小值（空返回 0）。</summary>
+        </member>
+        <member name="M:RUIF.ChartCandFmt.Max(System.Single[])">
+            <summary>数组最大值（空返回 1）。</summary>
+        </member>
+        <member name="M:RUIF.ChartCandFmt.Cumulative(System.Single[],System.Single[])">
+            <summary>累计百分比（输入按降序，输出写入 buffer，0~1）。</summary>
+        </member>
         <member name="T:RUIF.ChartsFmt">
             <summary>
             图表纯计算（单测面，v1.1 T0+T1 批次）：标度、Nice 刻度、柱几何、扇区角、直方 bin、热力色。
@@ -483,8 +1164,28 @@
              高保真平滑留待 v1.2 素材/算法件评估（对齐图鉴 T2 口径）。
              </summary>
         </member>
+        <member name="F:RUIF.Charts.AxisLabelW">
+            <summary>
+            刻度标签列宽（绘图区**右侧外部**的轴列，由 <see cref="M:RUIF.Charts.PlotArea(UnityEngine.Rect,System.Boolean)"/> 预留）。
+            <para>调用方若要在图外自画"天标签 / 类目标签"等与柱/线**逐列对齐**的内容，
+            必须用 <see cref="M:RUIF.Charts.PlotRectOf(UnityEngine.Rect,System.Boolean)"/> 取绘图区，而不是拿传入 rect 直接算 ——
+            否则会与本组件内部的柱/线几何错开一整个轴列宽。</para>
+            </summary>
+        </member>
+        <member name="F:RUIF.Charts.AxisLabelH">
+            <summary>刻度标签行高（12px，与 <see cref="P:RUIF.Tokens.FontLabel"/> 的实际字高匹配）。</summary>
+        </member>
         <member name="M:RUIF.Charts.Sparkline(UnityEngine.Rect,System.Single[],System.Nullable{UnityEngine.Color},System.Single,System.Boolean)">
             <summary>迷你走势线。自适应局部幅度，适合 KPI 卡内嵌；单系列、无轴。</summary>
+        </member>
+        <member name="M:RUIF.Charts.ChartDataHash(System.Single[])">
+            <summary>
+            值数组的指纹（FNV-1a）。**量化到 1/256** —— 吸收浮点抖动，
+            使「值稳定但末位有噪声」的数据仍能命中缓存；真正变化超过 1/256 才重烘焙。
+            </summary>
+        </member>
+        <member name="M:RUIF.Charts.ChartFoldRgb(UnityEngine.Color)">
+            <summary>颜色折叠成 24 位（供 <see cref="M:RUIF.TexCache.KeyData(System.Int32,System.Int64,System.Int32,System.Int32,System.Int32)"/> 用）。</summary>
         </member>
         <member name="M:RUIF.Charts.BarChartV(UnityEngine.Rect,System.Single[],System.String[],System.Nullable{UnityEngine.Color})">
             <summary>垂直柱状图：共享 Nice 网格 + 可选类目标签（值/标签数取小者）。</summary>
@@ -498,14 +1199,45 @@
         <member name="M:RUIF.Charts.LineChart(UnityEngine.Rect,System.Single[],System.Nullable{UnityEngine.Color},System.Boolean,System.Boolean)">
             <summary>折线图：基线 0 起，共享 Nice 网格，可选数据点。</summary>
         </member>
-        <member name="M:RUIF.Charts.AreaChart(UnityEngine.Rect,System.Single[],System.Nullable{UnityEngine.Color})">
-            <summary>面积图：折线 + 半透明填充（逐段垂直填充的阶梯近似，已知取舍见类注释）。</summary>
-        </member>
-        <member name="M:RUIF.Charts.DonutChart(UnityEngine.Rect,System.Single[],System.Single,System.String)">
+        <member name="M:RUIF.Charts.LineChart(UnityEngine.Rect,System.Single[][],UnityEngine.Color[],System.Boolean,System.Boolean)">
             <summary>
-            环形图：值数组按 <see cref="M:RUIF.Tokens.Series(System.Int32)"/> 上色，hole01=0 即饼图（见 <see cref="M:RUIF.Charts.PieChart(UnityEngine.Rect,System.Single[],System.String)"/>）。
-            中心可选 KPI 文本。12 点钟方向起始，顺时针。
+            **多系列折线**（每系列一色，**共享 y 轴与网格**）—— 用于"多线趋势"（如
+            自由 / 奴隶 / 囚犯三条人数线）。各行独立走贴图烘焙与缓存（键含数据哈希与颜色 ⇒ 不串）。
+            <paramref name="colors"/> 长度不足或为 null 时，未覆盖序列回落 <c>Tokens.Series(s)</c>。
             </summary>
+        </member>
+        <member name="M:RUIF.Charts.DrawLineSeries(UnityEngine.Rect,System.Single[],UnityEngine.Color,System.Single,System.Boolean)">
+            <summary>单系列折线的落笔（贴图烘焙 + 可选端点）；单/多系列入口共用。</summary>
+        </member>
+        <member name="M:RUIF.Charts.AreaChart(UnityEngine.Rect,System.Single[],System.Nullable{UnityEngine.Color})">
+            <summary>
+            面积图：折线 + 半透明填充。
+            填充 = **段内细分竖条 + 线性插值**逼近真实折线轮廓（旧实现一段一柱 ⇒ 视觉呈
+            锯齿阶梯，用户实机反馈「优化综合能力趋势图」）；每段按 ~3px 细分，
+            11 点 × 6 细分 ≈ 60 个 Box，零矩阵零贴图，开销可忽略。底部补一条落地基线。
+            </summary>
+        </member>
+        <member name="M:RUIF.Charts.DonutChart(UnityEngine.Rect,System.Single[],System.Single,System.String,UnityEngine.Color[],System.Single,System.Boolean)">
+             <summary>
+             环形图：值数组按 <see cref="M:RUIF.Tokens.Series(System.Int32)"/> 上色，hole01=0 即饼图（见 <see cref="M:RUIF.Charts.PieChart(UnityEngine.Rect,System.Single[],System.String)"/>）。
+             中心可选 KPI 文本。12 点钟方向起始，顺时针。
+             </summary>
+             <summary>
+             环形图 —— **贴图扇区路线**（一次一个扇区，零矩阵旋转）。
+            
+             <para><b>为什么改掉「旋转拼环」</b>（2026-09-13）：旧实现用 <c>Draw.Rotate</c> 把每段按 3° 再切小段
+             （4 个值 ⇒ 约 <b>122 个嵌套 <c>RotateScope</c></b>），每帧 122 次 <c>GUI.matrix</c> 读写；
+             而 <c>RotateScope</c> 的注释本身记载过同型事故（<c>Industrial.Gauge</c> 色块「飞满整屏」）。
+             改成贴图扇区后：**每个值 1 次 <c>GUI.DrawTexture</c>**（4 个值 ⇒ 4 次），**零矩阵操作**，
+             且形状由逐像素填充决定（边缘更干净、天然支持椭圆）。</para>
+            
+             <para><b>缓存键</b>：用 <see cref="M:RUIF.TexCache.KeySector(UnityEngine.Color,System.Single,System.Single,System.Single,System.Int32)"/>（结构化键）—— 颜色序号 / 起角 / 张角 /
+             孔洞比 / 边长 <b>五个判别量全部进键</b>，角度量化到 1°（环形图上肉眼不可见，但让动画也能命中缓存）。
+             <b>不再手拼位段</b>：2026-09-13 事故正是「算出孔洞比却传了常量」⇒ 饼图取到环图贴图、中间带孔。</para>
+            
+             <para>⚠ <b>约束</b>：调色板按 <see cref="M:RUIF.Tokens.Series(System.Int32)"/> 的 6 色**序号**编键 ⇒ 若切换主题改变了
+             这 6 个色值，需 <c>TexCache.Clear()</c>。</para>
+             </summary>
         </member>
         <member name="M:RUIF.Charts.PieChart(UnityEngine.Rect,System.Single[],System.String)">
             <summary>饼图 = hole01=0 的环形图。</summary>
@@ -517,13 +1249,105 @@
             <summary>热力网格：grid[行,列]，按网格内最大值归一后走 <see cref="M:RUIF.ChartsFmt.HeatColor(System.Single)"/>。</summary>
         </member>
         <member name="M:RUIF.Charts.PlotArea(UnityEngine.Rect,System.Boolean)">
-            <summary>绘图区：底部留出标签条（有类目标签时）。</summary>
+            <summary>
+            绘图区：底部留出标签条（有类目标签时）。
+            ⚠ 留出量必须是<b>标签字号的引擎行高</b>（原写死 14f）：预留带与 <see cref="M:RUIF.Charts.BarChartV(UnityEngine.Rect,System.Single[],System.String[],System.Nullable{UnityEngine.Color})"/>
+            里标签矩形的高度是同一件事的两个投影，各写一份就会重现"标签压柱"。
+            </summary>
+            <summary>
+            绘图区（= 传入 rect 去掉**右侧刻度列**、**上下各半行刻度标签**，
+            以及底部类目标签行）。调用方要在图外自画与柱/线逐列对齐的内容时，
+            用 <see cref="M:RUIF.Charts.PlotRectOf(UnityEngine.Rect,System.Boolean)"/> 取同一个矩形。
+            </summary>
+        </member>
+        <member name="M:RUIF.Charts.PlotRectOf(UnityEngine.Rect,System.Boolean)">
+            <summary>
+            公开的绘图区取值（供调用方对齐自画的轴外内容）。
+            <para><b>为什么需要它</b>：本组件内部的柱/线几何、以及刻度标签都基于这个矩形，
+            而它比传入 rect **窄一个 <see cref="F:RUIF.Charts.AxisLabelW"/>、上下各内缩半行标签**
+            ⇒ 调用方若拿传入 rect 自己算列宽，会整体错开一个轴列宽
+            （2026-10-05 车间概览"天标签与柱错位"实证）。</para>
+            </summary>
+            <param name="bottomLabels">是否还要为"底部分类标签"预留一行（<c>BarChartV</c> 为 true）。</param>
         </member>
         <member name="M:RUIF.Charts.GridH(UnityEngine.Rect,System.Single)">
-            <summary>横向 Nice 网格线 + 右上角刻度值（hair 线 / dim 标签）。</summary>
+             <summary>
+             横向 Nice 网格线 + **绘图区右侧外部**的刻度值（hair 线 / dim 标签）。
+            
+             <para>2026-10-05 修（玩家实机两轮反馈「纵坐标间隔太小 / 文本遮盖挤兑」）：原实现把标签
+             画成 <c>Rect(plot.xMax - 34f, y - 12f, 34f, 12f)</c> + <c>UpperRight</c>，有两个硬缺陷：
+             ① <b>压数据</b>：标签右缘贴 <c>plot.xMax</c> 内侧 ⇒ 盖住最右一列柱 / 折线端点；
+             ② <b>越界</b>：最高刻度（<c>y == plot.y</c>）的标签是 <c>plot.y - 12 .. plot.y</c>
+             ⇒ 正好顶在绘图区上边界**之外**，会压进调用方的标题行。</para>
+            
+             <para>现改为：标签画在 <c>plot.xMax + 2</c> 起的**轴列**内、且以刻度线**垂直居中**
+             （<c>MiddleLeft</c>）⇒ 半行只在绘图区上/下各探出 6px，恰好落在
+             <see cref="M:RUIF.Charts.PlotArea(UnityEngine.Rect,System.Boolean)"/> 预留的半行内 ⇒ <b>标签恒在传入 rect 内，既不压数据也不越界</b>。</para>
+             </summary>
         </member>
         <member name="M:RUIF.Charts.AxisFrame(UnityEngine.Rect)">
             <summary>散点坐标框架：左轴 + 底轴（hair 色）。</summary>
+        </member>
+        <member name="T:RUIF.CommandCandAtoms">
+             <summary>
+             ⑥ 命令面板候选层绘制 / 过滤转发：具名方法 Draw / Filter（与 <see cref="T:RUIF.CommandCandFmt"/> 的 Build 工厂同名，已 == 对应 Build 名），
+             纯转发既有 <see cref="T:RUIF.CommandPalette"/>，禁复制逻辑。候选 readonly struct 嵌套定义于本 static class（对齐 StatusCandAtoms.StatusPulseDot 写法）；
+             为避免与同名绘制方法（Draw / Filter）发生 C# 类型-成员命名冲突，struct 以族前缀命名为 <c>CommandDraw</c> / <c>CommandFilter</c>。
+            
+             <para><b>写回状态以入口 ref 参数承载（R8）</b>：本工程 <c>LangVersion=9.0</c> 不支持 ref 字段；
+             按 R8，跨帧状态 query / sel <b>不得</b>置于候选 struct 内作为 ref 字段，而以入口 <c>ref</c> 参数承载
+             （与原 CommandPalette.Draw 同形），正确写回归调用方。候选 struct 仅打包值参数（commands / filtered / scores）。
+             Filter 无 ref 状态，入口即 (cand)。</para>
+             </summary>
+        </member>
+        <member name="T:RUIF.CommandCandAtoms.CommandDraw">
+            <summary>命令面板绘制候选（值参数包）。query / sel 由调用方经入口 ref 持有（R8）。</summary>
+        </member>
+        <member name="F:RUIF.CommandCandAtoms.CommandDraw.commands">
+            <summary>全部命令源。</summary>
+        </member>
+        <member name="F:RUIF.CommandCandAtoms.CommandDraw.filtered">
+            <summary>过滤结果缓冲（调用方持有，零分配）。</summary>
+        </member>
+        <member name="F:RUIF.CommandCandAtoms.CommandDraw.scores">
+            <summary>模糊分缓冲（调用方持有，零分配）。</summary>
+        </member>
+        <member name="T:RUIF.CommandCandAtoms.CommandFilter">
+            <summary>命令过滤候选（值参数包，纯计算，无 ref 状态）。</summary>
+        </member>
+        <member name="F:RUIF.CommandCandAtoms.CommandFilter.query">
+            <summary>查询串。</summary>
+        </member>
+        <member name="F:RUIF.CommandCandAtoms.CommandFilter.source">
+            <summary>命令源。</summary>
+        </member>
+        <member name="F:RUIF.CommandCandAtoms.CommandFilter.dest">
+            <summary>结果缓冲。</summary>
+        </member>
+        <member name="F:RUIF.CommandCandAtoms.CommandFilter.scores">
+            <summary>分缓冲。</summary>
+        </member>
+        <member name="M:RUIF.CommandCandAtoms.Draw(UnityEngine.Rect,RUIF.CommandCandAtoms.CommandDraw,System.String@,System.Int32@)">
+            <summary>面板主体：转发 CommandPalette.Draw；返回被执行的命令（仅执行帧非空）。</summary>
+        </member>
+        <member name="M:RUIF.CommandCandAtoms.Filter(RUIF.CommandCandAtoms.CommandFilter)">
+            <summary>按模糊分过滤并降序：转发 CommandPalette.Filter；返回命中数。</summary>
+        </member>
+        <member name="T:RUIF.CommandCandFmt">
+            <summary>
+            ⑥ 命令面板候选层（参数对象 struct + Build，纯增量）：桥接既有 <see cref="T:RUIF.CommandPalette"/>（位于 NavAtoms.cs）。
+            仅打包「值参数」；跨帧状态持有者（query / sel）按本工程 <c>LangVersion=9.0</c> 约束，
+            以 <c>ref</c> 形式走 <see cref="T:RUIF.CommandCandAtoms"/> 入口（见该文件说明），不进 struct 字段。
+            候选 readonly struct 已迁移至 <see cref="T:RUIF.CommandCandAtoms"/> 内嵌套定义（对齐 StatusCandAtoms.StatusPulseDot 写法，
+            以族前缀 <c>CommandDraw</c> / <c>CommandFilter</c> 规避与同名绘制方法的 C# 命名冲突）；
+            本文件<b>只放纯计算 Build 工厂、无 struct 定义</b>（R3）。绘制 / 过滤转发在 <see cref="T:RUIF.CommandCandAtoms"/>，零绘制逻辑（GATE-ARCH）。
+            </summary>
+        </member>
+        <member name="M:RUIF.CommandCandFmt.Draw(RUIF.Command[],RUIF.Command[],System.Int32[])">
+            <summary>命令面板绘制候选：返回 <see cref="T:RUIF.CommandCandAtoms.CommandDraw"/>；query / sel 由调用方经入口 ref 持有（R8）。</summary>
+        </member>
+        <member name="M:RUIF.CommandCandFmt.Filter(System.String,RUIF.Command[],RUIF.Command[],System.Int32[])">
+            <summary>命令过滤候选（值参数包，纯计算，无 ref 状态）：返回 <see cref="T:RUIF.CommandCandAtoms.CommandFilter"/>。</summary>
         </member>
         <member name="T:RUIF.DataFmt">
             <summary>数据展示组件的纯计算（可离线单测）。</summary>
@@ -542,6 +1366,23 @@
         </member>
         <member name="M:RUIF.DataFmt.RankMedal(System.Int32)">
             <summary>名次徽记（前三有样式，其余返回序号）。</summary>
+        </member>
+        <member name="T:RUIF.StatCol">
+             <summary>
+             统计表**单列样式**：水平锚点 + 是否降调前景。
+            
+             <para>为值类型 / 无状态 —— 列样式表由调用方持有并复用（静态 readonly，绘制期零分配），
+             组件自身不记忆任何列状态（GATE-UI）。</para>
+             <para>⚠ <see cref="F:RUIF.StatCol.Align"/> 只取**水平分量**（行内一律垂直居中）；零初始化的
+             <c>default(StatCol)</c>（= <c>TextAnchor.UpperLeft</c>）会被归一化为左对齐，
+             见 <see cref="M:RUIF.TableFmt.ColumnAlignOf(RUIF.StatCol[],System.Int32)"/>。</para>
+             </summary>
+        </member>
+        <member name="F:RUIF.StatCol.Align">
+            <summary>该列锚点（表头与数据格共用）。</summary>
+        </member>
+        <member name="F:RUIF.StatCol.Dim">
+            <summary>该列是否用降调前景（<see cref="F:RUIF.Tokens.Dim"/>）—— 用于 `#` / 占比 / 参与季数这类次要列。</summary>
         </member>
         <member name="T:RUIF.DataAtoms">
             <summary>
@@ -573,10 +1414,130 @@
             <summary>排行榜（前三带徽记 + 数值条）。</summary>
         </member>
         <member name="M:RUIF.DataAtoms.StatTable(UnityEngine.Rect,System.String[],System.String[][],System.Single[],System.Single)">
-            <summary>统计表（表头 + 斑马纹行 + 比例列宽）。</summary>
+             <summary>
+             统计表（表头 + 斑马纹行 + 比例列宽）—— **v1.1.2 兼容重载**（5 参）。
+            
+             <para><b>为什么必须是独立方法（而不是把后续参数写成可选）</b>：C# 可选参数只是**编译期**
+             特性 —— 调用点会把默认值展开成**全部实参**写进 IL。若只保留 10 参版本，1.1.2 编译的
+             消费者（含工坊外部 Mod）升级到 1.2.0 后，其 IL 仍按 5 参签名查找 ⇒
+             <c>MissingMethodException</c>。故本 5 参签名**作为真正的方法保留**，委托到 10 参实现
+             （单一实现体，见下）。</para>
+            
+             <para>语义与 v1.1.2 逐字一致：全列 <see cref="F:UnityEngine.TextAnchor.MiddleLeft"/> +
+             <see cref="F:RUIF.Tokens.Muted"/> / <see cref="F:RUIF.Tokens.Text"/>，无逐列样式、无阈值带色。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.DataAtoms.StatTable(UnityEngine.Rect,System.String[],System.String[][],System.Single[],System.Single,RUIF.StatCol[],System.Int32,System.Single,System.Single[],System.String[])">
+             <summary>
+             统计表（表头 + 斑马纹行 + 比例列宽），可选**逐列样式**与**阈值带色列**。
+            
+             <para>⚠ <b>本重载所有参数均无默认值</b>（关键）：若此处带默认值，4 / 5 实参调用会与上面的
+             5 参重载产生 <c>CS0121</c> 重载歧义。唯一性自检 —— 4 实参 → 只匹配 5 参重载；
+             5 实参 → 5 参重载无需填默认、本重载要再填 5 个 ⇒ 选 5 参重载；10 实参 → 只匹配本重载。</para>
+            
+             <para><b>列样式</b>（<paramref name="cols"/>）：表头单元格与数据格**共用同列锚点**
+             （预览数值列表头亦右对齐）；<see cref="F:RUIF.StatCol.Dim"/> 的列数据格走
+             <see cref="F:RUIF.Tokens.Dim"/>（表头色不变）。越界列回退 <see cref="F:UnityEngine.TextAnchor.MiddleLeft"/>。</para>
+            
+             <para><b>阈值带色列</b>（<paramref name="bandCol"/> ≥ 0）：该列每格走
+             <see cref="M:RUIF.TableAtoms.ValueCell(UnityEngine.Rect,System.String,System.Single,System.Single)"/> ⇒ 底色 =
+             <see cref="M:RUIF.TableFmt.BandColor(System.Single)"/> 的 22% 叠加、右对齐带色字，文本优先
+             <paramref name="bandTexts"/>、缺失回退 <c>"0.#"</c>。带色格**收成行内药丸**
+             （高 = <see cref="M:RUIF.Measure.RowHeight(Verse.GameFont)"/> 的标签档、垂直居中），与预览 `.val{padding:1px 4px}`
+             的紧凑色块一致 —— 不做满行高色块。</para>
+            
+             <para>契约不变：不读 <c>Mouse</c>/<c>Event</c>；**行越出 rect 底边即 break** ⇒ 调用方按
+             <c>(1 + rows) * rowH</c> 预留；列宽按 <paramref name="shares"/> 比例切分
+             （<see cref="M:RUIF.TableFmt.ColumnSplit(UnityEngine.Rect,System.Single[],System.Single,System.Single[])"/>，sum 不必为 1，末列吃掉余宽）。</para>
+             </summary>
         </member>
         <member name="M:RUIF.DataAtoms.TimelinePro(UnityEngine.Rect,System.String[],System.String[],UnityEngine.Color[],System.Single)">
             <summary>时间轴（节点 + 日期 + 文本，按类型取色）。</summary>
+        </member>
+        <member name="T:RUIF.DataCandAtoms">
+            <summary>⑤ 数据展示候选组件（原 📋，官方实证支持，现落地）：账单队列 / 物品过滤器树 /
+            资源读取面板 / 信息卡浮窗 / 存储内容面板 / 贸易面板。无状态；数据与选中态由调用方持有。
+            官方依据：<c>BillStack</c>·<c>Dialog_BillConfig</c> / <c>Listing_TreeThingFilter</c> /
+            <c>Listing_ResourceReadout</c> / <c>Dialog_InfoCard</c> / <c>ITab_Contents</c> /
+            <c>Dialog_Trade</c>（见《原版UI代码标准（Spy取证）》）。</summary>
+        </member>
+        <member name="T:RUIF.DataCandAtoms.BillEntry">
+            <summary>账单条目（生产队列组件的数据模型）。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.BillEntry.label">
+            <summary>配方/任务标签。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.BillEntry.done">
+            <summary>已完成量。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.BillEntry.target">
+            <summary>目标量（≤0 表示无限/不显示进度）。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.BillEntry.priority">
+            <summary>是否高优先。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.BillEntry.paused">
+            <summary>是否暂停。</summary>
+        </member>
+        <member name="M:RUIF.DataCandAtoms.BillList(UnityEngine.Rect,RUIF.DataCandAtoms.BillEntry[])">
+            <summary>账单队列：配方 + 目标/完成 + 优先/暂停标记 + 底进度条。</summary>
+        </member>
+        <member name="T:RUIF.DataCandAtoms.FilterNode">
+            <summary>过滤器树节点（ThingFilter 树选择的数据模型）。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.FilterNode.label">
+            <summary>显示标签。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.FilterNode.depth">
+            <summary>缩进层级（0 为根）。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.FilterNode.hasChildren">
+            <summary>是否有子节点（决定 caret）。</summary>
+        </member>
+        <member name="M:RUIF.DataCandAtoms.ThingFilterTree(UnityEngine.Rect,RUIF.DataCandAtoms.FilterNode[],System.Boolean[],System.Boolean[])">
+            <summary>物品过滤器树：逐节点 caret 展开 + 勾选框 + 标签；点击切换展开/勾选态。</summary>
+        </member>
+        <member name="M:RUIF.DataCandAtoms.ResourceReadout(UnityEngine.Rect,System.String[],System.Int32[])">
+            <summary>资源读取面板：分类 + 计数（斑马纹，计数按规模取色）。</summary>
+        </member>
+        <member name="M:RUIF.DataCandAtoms.InfoCard(UnityEngine.Rect,System.String,System.String,System.String[])">
+            <summary>信息卡浮窗：标题 + 副标题 + 明细行（实体详情卡）。</summary>
+        </member>
+        <member name="M:RUIF.DataCandAtoms.StorageContents(UnityEngine.Rect,System.String[],System.Int32[])">
+            <summary>存储内容面板：物品标签 + 数量（ITab_Contents 形态）。</summary>
+        </member>
+        <member name="T:RUIF.DataCandAtoms.TradeRow">
+            <summary>贸易行（左我方 / 右商队）。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.TradeRow.label">
+            <summary>物品标签。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.TradeRow.count">
+            <summary>数量（正=我方持有 / 商队提供）。</summary>
+        </member>
+        <member name="F:RUIF.DataCandAtoms.TradeRow.tone">
+            <summary>语义色（盈余绿 / 逆差红 / 常规）。</summary>
+        </member>
+        <member name="M:RUIF.DataCandAtoms.TradePanel(UnityEngine.Rect,RUIF.DataCandAtoms.TradeRow[],RUIF.DataCandAtoms.TradeRow[])">
+            <summary>贸易面板：左我方 / 右商队双栏 + 表头。</summary>
+        </member>
+        <member name="T:RUIF.DataCandFmt">
+            <summary>⑤ 数据展示候选组件的纯计算（可离线单测）。</summary>
+        </member>
+        <member name="M:RUIF.DataCandFmt.BillRatio(System.Int32,System.Int32)">
+            <summary>账单进度（目标非正返回 0，钳制 0~1）。</summary>
+        </member>
+        <member name="M:RUIF.DataCandFmt.TreeRow(UnityEngine.Rect,System.Int32,System.Single,System.Int32,System.Single)">
+            <summary>树节点行矩形（按 depth 缩进）。</summary>
+        </member>
+        <member name="F:RUIF.DataCandFmt.TreeOpW">
+            <summary>树节点左侧操作区（caret / checkbox）宽度。</summary>
+        </member>
+        <member name="M:RUIF.DataCandFmt.CountTone(System.Int32)">
+            <summary>库存/资源计数 → 语义色（0 灰，其余按规模取 Accent/Info/Alive）。</summary>
+        </member>
+        <member name="M:RUIF.DataCandFmt.TradeTone(System.Int32)">
+            <summary>贸易差额色（我方盈余绿 / 逆差红）。</summary>
         </member>
         <member name="T:RUIF.DataExFmt">
             <summary>C2 数据扩展组件的纯计算（可离线单测）。</summary>
@@ -661,6 +1622,36 @@
         </member>
         <member name="M:RUIF.DataExAtoms.CompareBars(UnityEngine.Rect,System.String,System.String,System.Single,System.Single,System.Single)">
             <summary>A/B 对比条（上下并列 + 优胜高亮）。</summary>
+        </member>
+        <member name="T:RUIF.DomainCandAtoms">
+            <summary>⑩ 工业域绑定候选组件（原 📋，官方实证支持，现落地）：DataBridge 数据桥 / GridMap 俯视状态格网 /
+            CircuitTopology 电路拓扑 / ProductionFlow 生产链看板。皆为纯 presentational 视觉骨架（数字孪生方向）；
+            接真实域（PowerDomain/StockDomain/MapDomain/BillStack）属集成件，留作游戏实机验收。
+            官方依据：<c>PowerNet</c> · <c>Map</c>/<c>Zone</c>/<c>TerrainDef</c> · <c>BillStack</c>（见《工业管理方向扩展设计提案》）。</summary>
+        </member>
+        <member name="M:RUIF.DomainCandAtoms.DataBridgePanel(UnityEngine.Rect,RUIF.DomainCandAtoms.BridgeSnapshot[])">
+            <summary>数据桥面板：各域低频采样快照卡（域 + 时间戳 + 迷你趋势）。</summary>
+        </member>
+        <member name="M:RUIF.DomainCandAtoms.GridMap(UnityEngine.Rect,System.Int32[0:,0:])">
+            <summary>俯视状态格网：int[,] 单元→阈值配色（0=空）。</summary>
+        </member>
+        <member name="M:RUIF.DomainCandAtoms.CircuitGraph(UnityEngine.Rect,RUIF.DomainCandAtoms.CircuitNode[],System.Int32[],System.Int32[])">
+            <summary>电路拓扑：节点按 kind 分三列（发电/储能/负载），连线用官方 DrawLine。</summary>
+        </member>
+        <member name="M:RUIF.DomainCandAtoms.ProductionFlow(UnityEngine.Rect,RUIF.DomainCandAtoms.ProductionStage[])">
+            <summary>生产链看板：阶段盒左→右流水，箭头连接，进度填充。</summary>
+        </member>
+        <member name="T:RUIF.DomainCandFmt">
+            <summary>⑩ 工业域绑定候选组件的纯计算（可离线单测）。</summary>
+        </member>
+        <member name="M:RUIF.DomainCandFmt.NodeKindColor(System.Int32)">
+            <summary>电路节点配色（0 发电 / 1 储能 / 2 负载）。</summary>
+        </member>
+        <member name="M:RUIF.DomainCandFmt.CellTone(System.Single)">
+            <summary>格网单元配色（归一值 → 阈值三档）。</summary>
+        </member>
+        <member name="M:RUIF.DomainCandFmt.ProgressTone(System.Single)">
+            <summary>生产阶段进度配色。</summary>
         </member>
         <member name="T:RUIF.FeedbackFmt">
             <summary>反馈原子的纯计算（可离线单测）。</summary>
@@ -764,6 +1755,75 @@
              现把 alpha 乘进底色/边框/字形颜色。
              </summary>
         </member>
+        <member name="T:RUIF.FeedbackCandAtoms">
+            <summary>⑥ 反馈候选组件（原 📋，官方实证支持，现落地）：浮动菜单 / 警报中心·通知托盘。无状态；
+            数据由调用方传入。官方依据：<c>FloatMenu</c>/<c>FloatMenuOption</c>/<c>FloatMenuGrid</c>（菜单浮层）、
+            <c>AlertsReadout</c>/<c>Messages</c>/<c>LetterStack</c>（警报/通知，仅数据形态）
+            （见《原版UI代码标准（Spy取证）》）。</summary>
+        </member>
+        <member name="M:RUIF.FeedbackCandAtoms.FloatMenu(UnityEngine.Rect,System.String[],System.Int32@)">
+            <summary>浮动菜单：选项列表 + 悬停高亮 + 点击返回命中索引（命中无则返回 -1）。</summary>
+        </member>
+        <member name="T:RUIF.FeedbackCandAtoms.AlertEntry">
+            <summary>警报条目。</summary>
+        </member>
+        <member name="F:RUIF.FeedbackCandAtoms.AlertEntry.label">
+            <summary>警报标签。</summary>
+        </member>
+        <member name="F:RUIF.FeedbackCandAtoms.AlertEntry.severity">
+            <summary>严重度（0 提示 / 1 警告 / 2 危险）。</summary>
+        </member>
+        <member name="M:RUIF.FeedbackCandAtoms.AlertTray(UnityEngine.Rect,RUIF.FeedbackCandAtoms.AlertEntry[])">
+            <summary>警报中心/通知托盘：左色条 + 标签 + 严重度标记的警报卡列表。</summary>
+        </member>
+        <member name="T:RUIF.FeedbackCandFmt">
+            <summary>⑥ 反馈候选组件的纯计算（可离线单测）。</summary>
+        </member>
+        <member name="M:RUIF.FeedbackCandFmt.AlertSeverityTone(System.Int32)">
+            <summary>警报严重度配色（0 提示 / 1 警告 / 2 危险）。</summary>
+        </member>
+        <member name="M:RUIF.FeedbackCandFmt.FloatMenuRowTone(System.Boolean)">
+            <summary>浮动菜单行配色（悬停=强调软底，常规=卡片底）。</summary>
+        </member>
+        <member name="T:RUIF.HiAtoms">
+             <summary>
+             A0 · 新功能脉冲高亮原子族 —— 桥接 <c>Verse.UIHighlighter</c>（第二轮取证新增发现）。
+            
+             <para><b>跨帧协议（照抄，否则永不显示）</b>：高亮是<b>两帧协作</b>的 ——</para>
+             <list type="number">
+             <item>本帧（通常是"打开某面板"的那一帧）调 <see cref="M:RUIF.HiAtoms.Tag(System.String)"/> 登记一个 tag；</item>
+             <item><b>下一帧</b>绘制该 tag 对应控件时调 <see cref="M:RUIF.HiAtoms.Opportunity(UnityEngine.Rect,System.String)"/>，
+             引擎才会画脉冲光晕（判定条件是 <c>Time.frameCount == 登记帧 + 1</c>）。</item>
+             </list>
+             <para>单独调 <see cref="M:RUIF.HiAtoms.Opportunity(UnityEngine.Rect,System.String)"/> 不会有任何效果 —— 这是"高亮不出现"的唯一根因。</para>
+            
+             <para><b>视觉参数（原版实测）</b>：脉冲频率 1.2、振幅 0.7（<c>Pulser.PulseBrightness</c>），
+             底色为白色透明叠加（<c>Widgets.DrawTextHighlight</c>，默认外扩 4px）。</para>
+            
+             <para><b>定位</b>：用于"新手引导 / 版本新功能提示"，属可选装饰，缺失不影响功能。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.HiAtoms.Tag(System.String)">
+            <summary>登记一个待高亮项（本帧调用；tag 用稳定字符串，如 <c>"RUIF.Panel.Research"</c>）。</summary>
+        </member>
+        <member name="M:RUIF.HiAtoms.Opportunity(UnityEngine.Rect,System.String)">
+            <summary>在目标控件处绘制脉冲高亮（须在 <see cref="M:RUIF.HiAtoms.Tag(System.String)"/> 的<b>下一帧</b>调用）。</summary>
+        </member>
+        <member name="T:RUIF.HiCandFmt">
+             <summary>
+             ⑥ 新功能脉冲高亮候选层（纯桥接转发）：<see cref="T:RUIF.HiAtoms"/> 桥接 <c>Verse.UIHighlighter</c>，无样式字段，
+             故仅保留 Fmt 静态转发壳，不强造空 struct（NOTE-L2）。绘制逻辑零复制，全部转发 HiAtoms。
+            
+             <para><b>跨帧协议（与原 Atoms 一致）</b>：本帧调 <see cref="M:RUIF.HiCandFmt.Tag(System.String)"/> 登记，下一帧在目标控件处调
+             <see cref="M:RUIF.HiCandFmt.Opportunity(UnityEngine.Rect,System.String)"/> 才画脉冲光晕；单独调 Opportunity 无效果。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.HiCandFmt.Tag(System.String)">
+            <summary>登记一个待高亮项（本帧调用；tag 用稳定字符串，如 "RUIF.Panel.Research"）。</summary>
+        </member>
+        <member name="M:RUIF.HiCandFmt.Opportunity(UnityEngine.Rect,System.String)">
+            <summary>在目标控件处绘制脉冲高亮（须在 <see cref="M:RUIF.HiCandFmt.Tag(System.String)"/> 的下一帧调用）。</summary>
+        </member>
         <member name="T:RUIF.IndustrialFmt">
             <summary>
             工业管理原子纯计算（可离线单测，v1.2 第一批 T1 四原子）：
@@ -816,11 +1876,48 @@
              ④ 零逐帧堆分配（占比缓冲框架内静态复用）。
              </summary>
         </member>
+        <member name="P:RUIF.Industrial.GaugeLabelBand">
+             <summary>
+             表盘顶部<b>标题带</b>高度（= 标签字号的<b>引擎行高</b> + 2px 余量）：穹顶最高点不得越过它，见 <see cref="M:RUIF.Industrial.Gauge(UnityEngine.Rect,System.Single,System.Single,System.Single,System.String,System.Single,System.Single)"/>。
+            
+             <para><b>⚠ 必须是属性，不能是 <c>const</c> / <c>static readonly</c></b>：
+             <c>const</c> 不能调方法；<c>static readonly</c> 会把 <c>Text.TinyFontSupported</c>
+             在类型初始化时<b>冻成定值</b> —— 而后者运行期可变（玩家可随时勾选「禁用小字体」）
+             ⇒ 玩家切一次选项就拿到错行高。属性表达式每次调用重新求值，
+             与 <see cref="M:RUIF.Measure.RowHeight(Verse.GameFont)"/> 同源。</para>
+            
+             <para>历史值 <c>15f</c> 是"14px 标签带 + 1"的手写估计，与标签矩形高度
+             （原写死 <c>14f</c>）各写一份 ⇒ 两处一旦不同步就重现「标题被遮挡」。现已同源。</para>
+             </summary>
+        </member>
+        <member name="F:RUIF.Industrial.GaugeTickSteps">
+            <summary>刻度总格数（<b>每格 5%</b> ⇒ 21 个刻度位；主刻度每 25%，两端天然是主刻度）。</summary>
+        </member>
         <member name="M:RUIF.Industrial.Gauge(UnityEngine.Rect,System.Single,System.Single,System.Single,System.String,System.Single,System.Single)">
-            <summary>
-            指针表盘：上半环分区弧（正常/警告/危险）+ 指针 + 中心数值。
-            v01 落入的分区决定数值文本颜色；warn01/dead01 为阈值（0-1，见 <see cref="M:RUIF.IndustrialFmt.GaugeZone(System.Single,System.Single,System.Single)"/>）。
-            </summary>
+             <summary>
+             指针表盘：上半环分区弧（正常/警告/危险）+ **主/次刻度** + 指针 + 中心数值。
+             v01 落入的分区决定数值文本颜色；warn01/dead01 为阈值（0-1，见 <see cref="M:RUIF.IndustrialFmt.GaugeZone(System.Single,System.Single,System.Single)"/>）。
+            
+             <para><b>径向分层</b>（由外向内，互不压叠）：
+             环带 <c>[radius−8, radius]</c> → 刻度基线 <c>radius−11</c> → 主刻度到 <c>radius−17</c> /
+             次刻度到 <c>radius−14</c> → 指针长 ≤ <c>radius−19</c> → 轴心圆 2.5。</para>
+            
+             <para><b>① 标题带（v1.1.2 · 实机「标题被遮挡」根因）</b>：左上标签独占顶部
+             <see cref="P:RUIF.Industrial.GaugeLabelBand"/> px，穹顶最高点被钳在该带下沿。
+             原实现半径取 <c>r.height−20</c>、轴心 <c>r.yMax−8</c> ⇒ 弧顶落在 <c>r.y+12</c>，
+             与 14px 高的标签带**重叠 2px**；标签左对齐、长度一旦越过卡片中线，
+             <b>末字正好压在外圈弧顶上</b>（弧是不透明亮色 → 文字读不出来）。
+             修法 = 把"弧顶 ≤ 标题带下沿"做成几何约束（<c>radius ≤ c.y − (r.y + LabelBand)</c>），
+             而不是靠调用方把标题改短。</para>
+            
+             <para><b>2026-09-16 补</b>：带高与标签矩形高度此后<b>同源</b>（都 = <c>Measure.RowHeight(FontLabel)</c>），
+             历史值 15f / 14f 两个手写数已撤除 —— 上面那句"14px 高的标签带"是<b>旧值</b>，
+             真值随引擎行高与玩家「禁用小字体」选项变化。</para>
+            
+             <para><b>② 刻度密度（v1.1.2）</b>：原为 12.5% 一格（9 位）⇒ 相邻两格之间的量级读不出来；
+             改为 <b>5% 一格（21 位）</b>，每 25% 为主刻度（更长、更亮），
+             与 <c>warn01/dead01</c> 的 60% / 85% 分区边界一起构成可读量程。</para>
+             </summary>
         </member>
         <member name="M:RUIF.Industrial.GaugeNeedleDeg(System.Single)">
             <summary>指针角度（度）：v01=0 → 180°（左），v01=1 → 360°（右），上半环经过顶部。</summary>
@@ -849,8 +1946,128 @@
         <member name="M:RUIF.Industrial.StateColor(RUIF.MachineState)">
             <summary>设备状态色：运行绿 / 怠机弱线 / 故障红 / 加料黄 / 离线灰（只映射令牌）。</summary>
         </member>
+        <member name="T:RUIF.IndustrialCandAtoms">
+            <summary>
+            ⑥ 工业管理候选层绘制转发：具名方法 Gauge / LedMatrix / BottleneckRibbon / MachineStateTimeline
+            （与 <see cref="T:RUIF.IndustrialCandFmt"/> 的 Build 工厂同名，已 == 对应 Build 名），纯转发既有 <see cref="T:RUIF.Industrial"/>，禁复制逻辑。
+            候选 readonly struct 嵌套定义于本 static class（对齐 StatusCandAtoms.StatusPulseDot 写法）；
+            为避免与同名绘制方法（Gauge / LedMatrix / BottleneckRibbon / MachineStateTimeline）发生 C# 类型-成员命名冲突，
+            struct 以族前缀命名为 <c>IndustrialGauge</c> / <c>IndustrialLedMatrix</c> / <c>IndustrialBottleneckRibbon</c> / <c>IndustrialMachineStateTimeline</c>。
+            U4：仅消费传入 rect，行高 / 颜色映射交还 Industrial（沿用 Measure.RowHeight / Tokens）。
+            </summary>
+        </member>
+        <member name="T:RUIF.IndustrialCandAtoms.IndustrialGauge">
+            <summary>指针表盘候选（值参数包）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialGauge.v">
+            <summary>当前值。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialGauge.lo">
+            <summary>量程下限。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialGauge.hi">
+            <summary>量程上限。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialGauge.label">
+            <summary>左上标题（null/空不显示）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialGauge.warn01">
+            <summary>警告阈值（0~1）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialGauge.dead01">
+            <summary>危险阈值（0~1）。</summary>
+        </member>
+        <member name="T:RUIF.IndustrialCandAtoms.IndustrialLedMatrix">
+            <summary>状态灯阵候选（值参数包）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialLedMatrix.statuses">
+            <summary>每台设备状态（0 熄 / 1 正常 / 2 警告 / 3 故障 / ≥4 归故障）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialLedMatrix.cols">
+            <summary>列数（行数按长度自动推算）。</summary>
+        </member>
+        <member name="T:RUIF.IndustrialCandAtoms.IndustrialBottleneckRibbon">
+            <summary>瓶颈带候选（值参数包）。color 默认 Tokens.Info（溯源 Tokens）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialBottleneckRibbon.stageLabels">
+            <summary>各段标签（可空，段过窄时不绘制）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialBottleneckRibbon.stageTimes">
+            <summary>各段耗时。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialBottleneckRibbon.color">
+            <summary>非瓶颈段颜色（默认溯源 Tokens.Info）。</summary>
+        </member>
+        <member name="T:RUIF.IndustrialCandAtoms.IndustrialMachineStateTimeline">
+            <summary>设备状态时序候选（值参数包）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialMachineStateTimeline.labels">
+            <summary>行首标签（可空）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialMachineStateTimeline.rows">
+            <summary>多行状态段（rows[i] 与 durations[i] 平行）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandAtoms.IndustrialMachineStateTimeline.durations">
+            <summary>各段相对时长（与 rows 平行）。</summary>
+        </member>
+        <member name="M:RUIF.IndustrialCandAtoms.Gauge(UnityEngine.Rect,RUIF.IndustrialCandAtoms.IndustrialGauge)">
+            <summary>指针表盘：转发 Industrial.Gauge。</summary>
+        </member>
+        <member name="M:RUIF.IndustrialCandAtoms.LedMatrix(UnityEngine.Rect,RUIF.IndustrialCandAtoms.IndustrialLedMatrix)">
+            <summary>状态灯阵：转发 Industrial.LedMatrix（颜色由 Industrial.LedColor→Tokens 决定）。</summary>
+        </member>
+        <member name="M:RUIF.IndustrialCandAtoms.BottleneckRibbon(UnityEngine.Rect,RUIF.IndustrialCandAtoms.IndustrialBottleneckRibbon)">
+            <summary>瓶颈带：转发 Industrial.BottleneckRibbon（标签行高 / 条高由 Industrial 内按 Measure 决定）。</summary>
+        </member>
+        <member name="M:RUIF.IndustrialCandAtoms.MachineStateTimeline(UnityEngine.Rect,RUIF.IndustrialCandAtoms.IndustrialMachineStateTimeline)">
+            <summary>设备状态时序：转发 Industrial.MachineStateTimeline（颜色由 Industrial.StateColor→Tokens 决定）。</summary>
+        </member>
+        <member name="T:RUIF.IndustrialCandFmt">
+            <summary>
+            ⑥ 工业管理候选层（参数对象 struct + Build，纯增量）：桥接既有 <see cref="T:RUIF.Industrial"/>。
+            全部为值参数包（U4：行高 / 颜色映射由 Industrial 内部按 Tokens / Measure 决定，
+            候选不切行高、不散落魔法数，warn01/dead01 默认溯源为具名常量）。
+            候选 readonly struct 已迁移至 <see cref="T:RUIF.IndustrialCandAtoms"/> 内嵌套定义（对齐 StatusCandAtoms.StatusPulseDot 写法，
+            并以族前缀 <c>IndustrialGauge</c> / <c>IndustrialLedMatrix</c> / <c>IndustrialBottleneckRibbon</c> / <c>IndustrialMachineStateTimeline</c>
+            规避与同名绘制方法的 C# 命名冲突）；
+            本文件<b>只放纯计算 Build 工厂、无 struct 定义</b>（R3）。绘制转发在 <see cref="T:RUIF.IndustrialCandAtoms"/>，零绘制逻辑（GATE-ARCH）。
+            </summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandFmt.GaugeWarnDefault">
+            <summary>表盘警告阈值默认（溯源：与 Industrial.Gauge 原始默认同源，禁散落魔法数）。</summary>
+        </member>
+        <member name="F:RUIF.IndustrialCandFmt.GaugeDeadDefault">
+            <summary>表盘危险阈值默认（溯源同上）。</summary>
+        </member>
+        <member name="M:RUIF.IndustrialCandFmt.Gauge(System.Single,System.Single,System.Single,System.String,System.Single,System.Single)">
+            <summary>指针表盘候选：返回 <see cref="T:RUIF.IndustrialCandAtoms.IndustrialGauge"/>；warn01/dead01 默认溯源具名常量。</summary>
+        </member>
+        <member name="M:RUIF.IndustrialCandFmt.LedMatrix(System.Int32[],System.Int32)">
+            <summary>状态灯阵候选：返回 <see cref="T:RUIF.IndustrialCandAtoms.IndustrialLedMatrix"/>。</summary>
+        </member>
+        <member name="M:RUIF.IndustrialCandFmt.BottleneckRibbon(System.String[],System.Single[],System.Nullable{UnityEngine.Color})">
+            <summary>瓶颈带候选：返回 <see cref="T:RUIF.IndustrialCandAtoms.IndustrialBottleneckRibbon"/>；color 默认 Tokens.Info。</summary>
+        </member>
+        <member name="M:RUIF.IndustrialCandFmt.MachineStateTimeline(System.String[],RUIF.MachineState[][],System.Single[][])">
+            <summary>设备状态时序候选：返回 <see cref="T:RUIF.IndustrialCandAtoms.IndustrialMachineStateTimeline"/>。</summary>
+        </member>
         <member name="T:RUIF.InputState">
             <summary>输入控件的六态（GATE-UI：状态齐全——默认/悬停/按下/选中/禁用/焦点）。</summary>
+        </member>
+        <member name="T:RUIF.TriState">
+            <summary>
+            三态选择值（方案 §3.4 / §5.12）。<see cref="F:RUIF.TriState.Partial"/> 用于「父节点部分选中」——
+            二态表达不了，故必须有第三态；视觉 = <b>居中实心方块</b>（<b>不用字符 ✓</b>）。
+            </summary>
+        </member>
+        <member name="F:RUIF.TriState.Off">
+            <summary>未选。</summary>
+        </member>
+        <member name="F:RUIF.TriState.On">
+            <summary>已选（视觉 = 几何对勾三点折线）。</summary>
+        </member>
+        <member name="F:RUIF.TriState.Partial">
+            <summary>部分选中（视觉 = 盒内居中实心方块 <c>box × 0.5</c>；标签<b>保持 Text 不 Tone 化</b>）。</summary>
         </member>
         <member name="T:RUIF.InputFmt">
             <summary>输入控件的纯计算（可离线单测）。</summary>
@@ -876,19 +2093,155 @@
         <member name="M:RUIF.InputFmt.DebounceReady(System.Single,System.Single,System.Single)">
             <summary>防抖是否就绪（距上次输入已超过 delay 秒）。</summary>
         </member>
+        <member name="M:RUIF.InputFmt.ResolveSelection(System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
+             <summary>
+             选择件单行落位（方案 §5.12）。<b>纯函数</b> ⇒ 可离线单测（只做区间判定，不触引擎）。
+            
+             <para>判定序（D0 → D1 → D2 → D6）：
+             <c>width ≥ box + gap + labelWidth</c> ⇒ <see cref="F:RUIF.SelectionFit.Full"/>；
+             否则若 <c>width ≥ box + gap + ellipsisWidth</c> ⇒ <see cref="F:RUIF.SelectionFit.Ellipsis"/>；
+             否则若 <c>width ≥ box</c> ⇒ <see cref="F:RUIF.SelectionFit.BoxOnly"/>（<b>盒必须保留</b>，否则无法表达状态）；
+             否则 <see cref="F:RUIF.SelectionFit.Placeholder"/>。<c>rowHeight &lt; 14f</c> ⇒ <see cref="F:RUIF.SelectionFit.Omit"/>。</para>
+            
+             <para><b>缩盒不在本方法内</b>：<c>rowHeight &lt; box + 2</c> 时的缩盒（至 <c>rowHeight − 2</c>，下限 12）
+             是调用方的几何职责（<c>InputAtoms.SelectionRow</c>），本方法只给落位档。</para>
+             </summary>
+             <param name="rowHeight">行高（已含调用方的下限保护结果）。</param>
+             <param name="box">盒边长基准（= <c>Measure.RowHeight(Tokens.FontLabel)</c>）。</param>
+             <param name="width">行宽。</param>
+             <param name="labelWidth">标签实测宽（<c>Measure.Width(label, Tokens.FontLabel)</c>）。</param>
+             <param name="gap">盒-标签间距（<c>Tokens.SpaceXs</c>）。</param>
+             <param name="ellipsisWidth">省略号字形自身的实测宽（用作 D1→D2 的派生阈值）。</param>
+        </member>
+        <member name="P:RUIF.InputFmt.MarkStroke">
+            <summary>盒内符号避让与勾线宽（<c>Tokens.RuleHeight × 2</c>，§5.12）。</summary>
+        </member>
+        <member name="F:RUIF.InputFmt.SelectionOmitRowHeight">
+            <summary>省略该行的行高阈值（14f，§5.12 D6）。</summary>
+        </member>
+        <member name="F:RUIF.InputFmt.SelectionMinBox">
+            <summary>缩盒下限（12f，§5.12 D3）。</summary>
+        </member>
+        <member name="T:RUIF.SelectionFit">
+            <summary>选择件落位档（方案 §5.12 降级阶梯）。</summary>
+        </member>
+        <member name="F:RUIF.SelectionFit.Full">
+            <summary>D0：盒 + 完整标签。</summary>
+        </member>
+        <member name="F:RUIF.SelectionFit.Ellipsis">
+            <summary>D1：盒 + 省略号标签（附完整悬停提示）。</summary>
+        </member>
+        <member name="F:RUIF.SelectionFit.BoxOnly">
+            <summary>D2：仅盒（藏标签；<b>盒必须保留</b>，否则无法表达状态）。</summary>
+        </member>
+        <member name="F:RUIF.SelectionFit.Placeholder">
+            <summary>D6：宽度不足盒 ⇒ 画「—」占位。</summary>
+        </member>
+        <member name="F:RUIF.SelectionFit.Omit">
+            <summary>D6：行高不足 ⇒ 省略该行（不绘制、不命中）。</summary>
+        </member>
         <member name="T:RUIF.InputAtoms">
-            <summary>
-            基础输入控件（S3-1）：分段选择、开关、步进器、滑条、搜索框、标签多选、键位显示、六态规范。
-            全部<b>无状态</b>——值/缓冲/时间戳均由调用方持有并传入（GATE-UI）。
-            已知官方要点：<b>Widgets.ButtonText 没有 disabled 参数，禁用走 active:false</b>；
-            <b>HorizontalSlider 是 ref 语义</b>（不是返回 float）。
-            </summary>
+             <summary>
+             基础输入控件（S3-1）：分段选择、开关、步进器、滑条、搜索框、标签多选、键位显示、六态规范；
+             以及 v1.3.0 新增的选择件族（勾选 / 三态勾选 / 纵向单选，方案 §5.12）。
+             全部<b>无状态</b>——值/缓冲/时间戳均由调用方持有并传入（GATE-UI）。
+             已知官方要点：<b>Widgets.ButtonText 没有 disabled 参数，禁用走 active:false</b>；
+             <b>HorizontalSlider 是 ref 语义</b>（不是返回 float）。
+            
+             <para><b>本批（v1.3.0）两条硬纪律</b>：
+             ① 选择件<b>全部自绘、不桥原版</b>（<c>Widgets.Checkbox/RadioButton/CheckboxMulti</c> 会<b>无条件</b>响悬停音、
+             且 <c>disabled:true</c> 不灰化，与统一禁用语义直接冲突）；
+             ② 禁用态<b>不置 <c>GUI.enabled=false</c></b>、100% 自绘灰化（§5.3 Disabled 行）。</para>
+             </summary>
         </member>
         <member name="M:RUIF.InputAtoms.Segmented(UnityEngine.Rect,System.String[],System.Int32@)">
             <summary>分段选择（互斥单选取代原版缺失的 RadioButtonGroup）；返回是否变化。</summary>
         </member>
+        <member name="M:RUIF.InputAtoms.Segmented(UnityEngine.Rect,System.String[],System.Int32@,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)">
+             <summary>
+             分段选择（补 <paramref name="enabled"/> / <paramref name="tone"/> / 焦点入口）；返回是否变化。
+            
+             <para><b>SemVer 安全</b>：旧 3 参签名<b>原样保留</b>；C# 重载解析优先「填默认值更少」者，
+             故 <c>Segmented(rect, options, ref index)</c> 仍精确匹配旧重载，无歧义（§3.4）。</para>
+            
+             <para><b>A 类一次性正确性要求（§5.3 末段）</b>：选中段的 fill / text <b>必须</b>走
+             <c>ToneSoft(tone)</c> / <c>Tone(tone)</c> —— 若沿用既有实现的 <c>AccentSoft</c> / <c>Accent</c>，
+             则 <c>tone: Danger</c> 的选中段仍是蓝色 accent ⇒ <c>tone</c> 形同虚设。
+             <b>分隔线保持 <see cref="F:RUIF.Tokens.BorderSoft"/></b>（分段件的形态差异，非配色偏差）。</para>
+             </summary>
+             <param name="rect">控件矩形。</param>
+             <param name="options">各段文案（调用方自行 <c>Tr.Get</c>）。</param>
+             <param name="index">选中下标（由调用方持有，组件零状态）。</param>
+             <param name="enabled">是否可用。禁用时<b>不消费事件、不响悬停音</b>，并自绘灰化（剥除 tone）。</param>
+             <param name="tone">语义色调（决定选中段的填充与文字色）。</param>
+             <param name="focusRing">强制画焦点环（作用域 = 整件 <paramref name="rect"/>）。</param>
+             <param name="controlName">键盘通路名（登记在<b>首段</b>的控件创建前 —— 整组的焦点入口）。</param>
+        </member>
         <member name="M:RUIF.InputAtoms.ToggleSwitch(UnityEngine.Rect,System.Boolean@)">
-            <summary>开关（Track + Knob）；返回是否切换。</summary>
+             <summary>
+             开关（Track + Knob）；返回<b>是否切换</b>。
+            
+             <para><b>§9.1 既有缺陷修复（行为修复，无 API 变更）</b>：原实现用 <c>GUI.enabled</c> 决定
+             「标签画不画」，而 <c>Widgets.ButtonInvisible</c> <b>不检 <c>GUI.enabled</c></b>（实测：
+             音效只受 <c>doMouseoverSound</c> 控制）⇒ 禁用时<b>仍可切换、却无标签</b>。现改为：
+             ① 标签<b>照常绘制</b>；② 命中判定<b>总是调用 + 事后 AND</b> ⇒ 禁用时<b>不产生状态变更、不消费事件</b>；
+             ③ 禁用时按 §5.3 的 Disabled 行通道<b>自绘灰化</b>（<b>绝不置 <c>GUI.enabled=false</c></b>）。</para>
+            
+             <para><b>几何保留说明</b>：Track/Knob 的既有字面尺寸（36/18/15/2/1.5）<b>原样保留</b> ——
+             §9.1 明示本批只修行为、不做几何重制；令牌化属另立改动（已登记，见回报）。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.Checkbox(UnityEngine.Rect,System.String,System.Boolean@,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)">
+            <summary>
+            勾选框（<b>方形框 + 几何对勾、控件在左 / 标签在右</b>）；返回<b>是否变化</b>。
+            <para>对原版的两处<b>有意偏离</b>（均登记）：① 原版 <c>CheckboxLabeled</c> 盒<b>靠右</b>（<c>rect.xMax − 24f</c>），
+            本件<b>左置</b>（与既有 <c>ToggleSwitch</c> 同向、与纵向 <c>RadioGroup</c> 自然左对齐）；
+            ② 盒边长取 <c>Measure.RowHeight(Tokens.FontLabel)</c>（≈18）而非原版字面 <c>24f</c>。</para>
+            </summary>
+            <param name="rect"><b>整行</b>矩形（可点区 = 整行，非仅盒子）。高度不足 14f 时按 §5.12 D6 省略该行。</param>
+            <param name="label">标签文案（调用方自行 <c>Tr.Get</c>；放不下时走省略号 + 完整悬停提示）。</param>
+            <param name="on">二态值，由调用方持有。</param>
+            <param name="enabled">是否可用（禁用时不产生状态变更、不消费事件）。</param>
+            <param name="tone">语义色调（选中 = 三通道 Tone 化，逐格 == <c>StateSample.Selected</c>）。</param>
+            <param name="focusRing">强制画焦点环（作用域 = <b>整行可点区</b>，§5.12 显式偏离 <c>StateSample</c>）。</param>
+            <param name="controlName">键盘通路名（<c>null</c> = 不登记）。</param>
+        </member>
+        <member name="M:RUIF.InputAtoms.CheckboxTri(UnityEngine.Rect,System.String,RUIF.TriState@,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)">
+            <summary>
+            三态勾选框（父节点「部分选中」）；返回<b>是否变化</b>。
+            <para>循环序 <c>Off → On → Partial → Off</c>。<see cref="F:RUIF.TriState.Partial"/> 的视觉 =
+            <b>盒内居中实心方块</b>（<c>box × 0.5</c>），且<b>标签保持 <c>Text</c> 不 Tone 化</b>
+            —— 半选是混合态，标签 Tone 化会与 <see cref="F:RUIF.TriState.On"/> 混淆（§5.12 对 §5.3 的唯一扩展）。</para>
+            </summary>
+            <param name="rect">整行矩形。</param>
+            <param name="label">标签文案。</param>
+            <param name="state">三态值，由调用方持有。</param>
+            <param name="enabled">是否可用。</param>
+            <param name="tone">语义色调。</param>
+            <param name="focusRing">强制画焦点环。</param>
+            <param name="controlName">键盘通路名（<c>null</c> = 不登记）。</param>
+        </member>
+        <member name="M:RUIF.InputAtoms.RadioGroup(UnityEngine.Rect,System.String[],System.Int32@,System.Nullable{System.Single},System.Boolean,RUIF.ButtonTone,System.Boolean,System.String)">
+             <summary>
+             纵向单选组（每行一个圆点，至多一个 <see cref="F:RUIF.TriState.On"/> 形态的选中）；返回<b>是否变化</b>。
+            
+             <para><b>圆点实现（§5.12 主理人裁决）</b>：<c>TexFmt.FillDisc</c> + <c>TexCache</c> +
+             <c>Draw.Color(tone)</c> 作用域着色 ⇒ <b>1 张中性白 disc 覆盖 6 态 × 4 tone</b>
+             （按色建键会导致键爆炸，故<b>不走</b> <c>TexCache.KeySector</c>）；纹理不可用时退 <b>12 段折线</b>。
+             ⛔ 拒绝用 4px 方块「近似」圆。</para>
+            
+             <para><b>空间不足</b>：总需高 <c>n × rowH</c>；不足则 <b>D2 减少条目</b>（按剩余高截断 + 「还有 N 条」），
+             <b>禁止压缩 <c>rowH</c></b>（压缩必切字）。</para>
+             </summary>
+             <param name="rect">整组矩形（纵向排布起点）。</param>
+             <param name="labels">各选项文案（调用方自行 <c>Tr.Get</c>）。</param>
+             <param name="index">选中下标，由调用方持有（越界值不写入，只影响绘制）。</param>
+             <param name="rowH">行高；<c>null</c> ⇒ 按 <c>Measure.ControlHeight(Tokens.FontLabel)</c> 实取。
+             低于 <c>Measure.RowHeight(Tokens.FontLabel)</c> 时<b>上调并报一次错</b>（<b>不静默夹取</b>）。</param>
+             <param name="enabled">是否可用。</param>
+             <param name="tone">语义色调。</param>
+             <param name="focusRing">强制画焦点环（作用域 = 整组 <paramref name="rect"/>）。</param>
+             <param name="controlName">键盘通路名（登记在<b>首行</b>的控件创建前）。</param>
         </member>
         <member name="M:RUIF.InputAtoms.Stepper(UnityEngine.Rect,System.Int32@,System.Int32,System.Int32,System.Int32)">
             <summary>数值步进器（− 值 +）；返回是否变化。</summary>
@@ -914,6 +2267,95 @@
         </member>
         <member name="M:RUIF.InputAtoms.StateSample(UnityEngine.Rect,System.String,RUIF.InputState)">
             <summary>六态规范示意（默认/悬停/按下/选中/禁用/焦点）——用于验收状态齐全。</summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.ResolveRowHeight(System.Nullable{System.Single},System.Single)">
+            <summary>
+            行高解析（§5.12，<c>RadioGroup</c> 专用）：<c>null</c> ⇒ <c>Measure.ControlHeight(Tokens.FontLabel)</c> 实取；
+            低于 <c>Measure.RowHeight(Tokens.FontLabel)</c> 时<b>上调 + <c>Log.ErrorOnce</c> 报一次</b>（<b>不静默夹取</b>）；
+            最后按容器可用高收敛（不溢出容器，与 <c>Layout.Take</c> 同风范）。
+            </summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.SelectionRow(UnityEngine.Rect,System.String,System.Boolean,System.Boolean,System.Boolean,RUIF.ButtonTone,System.Boolean,System.String,System.Boolean)">
+            <summary>
+            选择件单行（盒 / 圆点 + 标签 + <b>整行可点区</b> + 焦点环）。返回<b>是否被点击</b>（已过 <c>enabled</c> 门禁）。
+            <para>几何<b>全部 <see cref="T:RUIF.Measure"/> 派生</b>（零字面量）：盒边长 = <c>RowHeight(FontLabel)</c>、
+            行高 = 调用方给定矩形高（<c>RadioGroup</c> 默认传 <c>ControlHeight(FontLabel)</c>）、
+            间距 = <c>SpaceXs</c>、勾线宽 = <c>RuleHeight × 2</c>。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.DrawCheck(UnityEngine.Rect,UnityEngine.Color)">
+            <summary>
+            几何对勾（三点折线，坐标逐值取自 §5.12）：<c>(0.26b,0.52b) → (0.44b,0.70b) → (0.74b,0.28b)</c>。
+            <para><b>⛔ 不用字符 ✓</b>：状态符号须与盒精确居中且<b>跨字体一致</b>。
+            <b>⛔ 不用 <c>Widgets.DrawLine</c></b>：它改 GL 矩阵（<c>GL.PushMatrix/MultMatrix</c>），
+            <c>GUI.matrix</c> 的滚动平移不被感知 ⇒ <b>滚动视图内会「飞散」</b>（既有实证）。
+            本实现把折线算进<b>中性白</b>像素缓冲 → 上屏一次 <c>GUI.DrawTexture</c> → <c>Draw.Color</c> 着色。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.DrawPartialSquare(UnityEngine.Rect,UnityEngine.Color)">
+            <summary>半选：<b>居中实心方块</b>（边长 <c>box × 0.5</c>，不触边框）。</summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.DrawRadio(UnityEngine.Rect,UnityEngine.Color,UnityEngine.Color,System.Nullable{UnityEngine.Color})">
+            <summary>
+            圆点（单选框）：外盘 = 描边色、内盘 = 填充色（形成 1px 环）、选中 = 直径 <c>box × 0.45</c> 的实心盘。
+            <para>走 §5.12 裁决的 <c>TexFmt.FillDisc</c> + <c>TexCache</c> + <c>Draw.Color</c> 作用域着色 ——
+            纹理是<b>中性白</b>，颜色不进键 ⇒ 1 张覆盖 6 态 × 4 tone。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.DrawDisc(UnityEngine.Rect,UnityEngine.Color)">
+            <summary>中性白圆盘（缓存键 = <c>(kind, 直径)</c>；颜色由 <c>Draw.Color</c> 作用域提供）。</summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.StampCheck(UnityEngine.Rect,UnityEngine.Color)">
+            <summary>纹理不可用时的对勾退化：把两段折线按 1px 步长用 <c>Draw.Box</c> 盖印（零 GL / 零矩阵依赖）。</summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.StampDisc(UnityEngine.Rect,UnityEngine.Color)">
+            <summary>纹理不可用时的圆盘退化：<b>12 段折线</b>近似（照 <c>TexAtoms.FallbackGradient</c> 的 12 段范式）。</summary>
+        </member>
+        <member name="M:RUIF.InputAtoms.StampLine(UnityEngine.Vector2,UnityEngine.Vector2,UnityEngine.Color,System.Single)">
+            <summary>按 1px 步长盖印一条线段（<c>Draw.Box</c> 限定为轴对齐矩形 ⇒ 用正方形戳逐步逼近）。</summary>
+        </member>
+        <member name="T:RUIF.InputCandAtoms">
+            <summary>④ 输入候选组件（原 📋，官方实证支持，现落地）：批量滑杆配置窗 / 区域·允许区编辑器 /
+            键位绑定面板。无状态；值与选中态由调用方持有（ref / 数组原地回写）。官方依据：
+            <c>Listing_Standard.Slider</c>/<c>Widgets.HorizontalSlider</c> · <c>Area</c>/<c>AllowedArea</c>/
+            <c>RadioButtonLabeled</c> · <c>KeyBindingDef</c>/<c>Dialog_KeyBindings</c>/<c>KeyBindingSlot</c>
+            （见《原版UI代码标准（Spy取证）》）。</summary>
+        </member>
+        <member name="T:RUIF.InputCandAtoms.SliderCfg">
+            <summary>滑杆配置。</summary>
+        </member>
+        <member name="F:RUIF.InputCandAtoms.SliderCfg.label">
+            <summary>标签。</summary>
+        </member>
+        <member name="F:RUIF.InputCandAtoms.SliderCfg.min">
+            <summary>下限。</summary>
+        </member>
+        <member name="F:RUIF.InputCandAtoms.SliderCfg.max">
+            <summary>上限。</summary>
+        </member>
+        <member name="F:RUIF.InputCandAtoms.SliderCfg.unit">
+            <summary>单位后缀（如 % / h）。</summary>
+        </member>
+        <member name="M:RUIF.InputCandAtoms.BatchSliders(UnityEngine.Rect,RUIF.InputCandAtoms.SliderCfg[],System.Single[])">
+            <summary>批量滑杆配置窗：多滑杆同列，拖拽轨道原地回写 values[i]。</summary>
+        </member>
+        <member name="M:RUIF.InputCandAtoms.AreaEditor(UnityEngine.Rect,System.String[],System.Int32@)">
+            <summary>区域·允许区编辑器：区域名 + 单选 dot，点击行选中（AllowedArea 选择器形态）。</summary>
+        </member>
+        <member name="M:RUIF.InputCandAtoms.KeyBindPanel(UnityEngine.Rect,System.String[],System.String[],System.Boolean[])">
+            <summary>键位绑定面板：动作 + 可点击键位槽；点击切换监听态（具体按键捕获由调用方完成）。</summary>
+        </member>
+        <member name="T:RUIF.InputCandFmt">
+            <summary>④ 输入候选组件的纯计算（可离线单测）。</summary>
+        </member>
+        <member name="M:RUIF.InputCandFmt.SliderValueFromPos(System.Single,UnityEngine.Rect,System.Single,System.Single)">
+            <summary>由鼠标 X 在滑杆轨道上反解取值（钳制 0~1 → [min,max]）。</summary>
+        </member>
+        <member name="M:RUIF.InputCandFmt.AreaRowTone(System.Boolean)">
+            <summary>区域选中态底色。</summary>
+        </member>
+        <member name="M:RUIF.InputCandFmt.KeybindSlotTone(System.Boolean)">
+            <summary>键位槽底色（监听中=强调，常规=面板凸起）。</summary>
         </member>
         <member name="T:RUIF.InputExFmt">
             <summary>输入扩展控件（B2）的纯计算（可离线单测；多处刻意手写算法，避免依赖未核实的 Unity 转换 API）。</summary>
@@ -1113,6 +2555,14 @@
         <member name="M:RUIF.InteractAtoms.ToolbarIcon(UnityEngine.Rect,System.String,System.Boolean)">
             <summary>工具栏图标钮（方形）：激活态 accent 底 + accent 描边；返回是否点击。</summary>
         </member>
+        <member name="T:RUIF.LayoutCandAtoms">
+            <summary>⑨ 版式候选组件（原 📋，现落地）：分层钻取孪生驾驶舱（Cockpit）外壳——KPI 顶条 + 左导航 +
+            主面板 + 底部钻取抽屉。纯 presentational 布局骨架；KPI→M3 抽屉→GridMap/CircuitTopology 的真实数据钻取属集成件。
+            官方依据：M3 抽屉钻取版式 / <c>MainTabWindow</c> 指挥台形态。</summary>
+        </member>
+        <member name="M:RUIF.LayoutCandAtoms.CockpitFrame(UnityEngine.Rect,System.String[],System.String[],System.Int32@)">
+            <summary>分层钻取孪生驾驶舱外壳：返回当前激活面板索引（写回 activePanel）。</summary>
+        </member>
         <member name="T:RUIF.MiscFmt">
             <summary>杂项原子的纯计算（可离线单测）。</summary>
         </member>
@@ -1308,6 +2758,46 @@
             返回当前是否聚焦。
             </summary>
         </member>
+        <member name="T:RUIF.NavCandAtoms">
+            <summary>⑦ 导航候选组件（原 📋，官方实证支持，现落地）：主标签页框架 / 检视页签组 / 页面向导 /
+            搜索面板 / 策略管理器。皆为纯 presentational 基础件（无状态，选中态由调用方 ref 持有）；
+            接原版窗口生命周期（<c>MainTabWindow</c>/<c>ITab</c>/<c>Page</c>）属集成件，留作游戏实机验收。
+            官方依据：<c>MainTabWindow</c>(15) · <c>ITab_*</c>(48) · <c>Page_*</c>(15) ·
+            <c>Dialog_Search</c>/<c>MapSearch</c> · <c>Dialog_ManagePolicies</c>（见《原版UI代码标准（Spy取证）》）。</summary>
+        </member>
+        <member name="M:RUIF.NavCandAtoms.MainTabStrip(UnityEngine.Rect,System.String[],System.Int32@)">
+            <summary>主标签页底栏：标签 pill，选中=抬起强调；点击选中。生命周期接入 MainTabWindow 属集成件。</summary>
+        </member>
+        <member name="M:RUIF.NavCandAtoms.InspectTabs(UnityEngine.Rect,System.String[],System.Int32@)">
+            <summary>检视页签组：检视面板内的迷你横向页签，选中=下划线强调；点击选中。</summary>
+        </member>
+        <member name="M:RUIF.NavCandAtoms.WizardSteps(UnityEngine.Rect,System.String[],System.Int32@)">
+            <summary>页面向导步骤条：编号节点 + 连接线，已完成/当前/待办三态；点击跳步（写回 step）。</summary>
+        </member>
+        <member name="M:RUIF.NavCandAtoms.SearchBox(UnityEngine.Rect,System.String@)">
+            <summary>搜索输入框：文本输入 + 占位符 + 清除按钮（×）；空文本显示「搜索…」。</summary>
+        </member>
+        <member name="M:RUIF.NavCandAtoms.PolicyList(UnityEngine.Rect,System.String[],System.Int32@)">
+            <summary>策略管理器：策略列表，选中=强调软底 + 单选点；右侧「⋮⋮」为排序握把（presentational）。</summary>
+        </member>
+        <member name="T:RUIF.NavCandFmt">
+            <summary>⑦ 导航候选组件的纯计算（可离线单测）。</summary>
+        </member>
+        <member name="M:RUIF.NavCandFmt.MainTabTone(System.Boolean)">
+            <summary>主标签页底栏选中态文字色。</summary>
+        </member>
+        <member name="M:RUIF.NavCandFmt.PolicyRowTone(System.Boolean)">
+            <summary>策略列表行底色（选中=强调软底）。</summary>
+        </member>
+        <member name="M:RUIF.NavCandFmt.WizardStepTone(System.Int32,System.Int32)">
+            <summary>向导步骤节点色（i&lt;step 已完成 / i==step 当前 / 否则待办）。</summary>
+        </member>
+        <member name="M:RUIF.NavCandFmt.WizardConnectorTone(System.Int32,System.Int32)">
+            <summary>向导步骤连接线色（已完成段=强调，待办段=边框软色）。</summary>
+        </member>
+        <member name="M:RUIF.NavCandFmt.WizardNumberTone(System.Int32,System.Int32)">
+            <summary>向导步骤序号色。</summary>
+        </member>
         <member name="T:RUIF.TimeBucket">
             <summary>相对时间档位（**语义**，与文案解耦；供消费者自定义渲染，也让分档可离线单测）。</summary>
         </member>
@@ -1407,6 +2897,118 @@
         <member name="M:RUIF.OfficialDataAtomsC.PolicyCard(UnityEngine.Rect,System.String,System.String,System.Int32)">
             <summary>⑭ 政策卡（官方 Policies 语义：名称 + 摘要 + 应用人数）。</summary>
         </member>
+        <member name="T:RUIF.OfficialDataCandAtoms">
+            <summary>
+            ⑮ 官方数据候选组件（A/B/C 三族）的绘制入口与参数对象。
+            <para>候选 readonly struct 同构于 DataCand：嵌套于本 *CandAtoms 静态类内（参见
+            <see cref="T:RUIF.DataCandAtoms"/> 的 BillEntry / FilterNode / TradeRow）；纯计算 Build 工厂则在
+            <see cref="T:RUIF.OfficialDataCandFmt"/>（同构 DataCandFmt：仅纯计算、无 struct 定义）。
+            每个候选对应一个 <c>Draw(Rect, XxxCand)</c> 单入口，内部<b>逐字段转发</b>到既有
+            <see cref="T:RUIF.OfficialDataAtoms"/> / <see cref="T:RUIF.OfficialDataAtomsB"/> / <see cref="T:RUIF.OfficialDataAtomsC"/>
+            对应方法，零绘制逻辑复制（GATE-ARCH：候选层复用 Atoms/Fmt，禁止复制绘制）。</para>
+            <para>契约（GATE-UI）：U1 readonly struct 参数对象；U2 单入口 Draw(Rect, cand)；U3 纯展示零实例状态；
+            U4 只消费传入 rect（行高/布局全在既有 Atoms 内）；U5 列表型空数据兜底由既有 Atoms 内部原样保留
+            （空数组 / 长度不齐时 Atoms 直接 return，不做二次断言）。</para>
+            </summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.WealthBreakdownCand">
+            <summary>财富构成候选（官方 WealthWatcher 语义：分段堆叠 + 总额 + 图例）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.RecordsTableCand">
+            <summary>记录表候选（官方 Pawn_RecordsTracker 语义：键值两列表）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.HistoryFeedCand">
+            <summary>历史事件流候选（日期头 + 事件行 + 类型 pill）。kinds 为已本地化的类型文案。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.TaleCardCand">
+            <summary>传说卡候选（官方 Tale 系统：讲述者 + 叙述 + 流传次数）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.LetterCardCand">
+            <summary>信件归档卡候选（官方 LetterStack 语义：类型色条 + 标题 + 摘要 + 时间）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.BillListCand">
+            <summary>账单队列候选（官方 BillStack 语义：配方 + 完成/目标 + 暂停态）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.QuestBoardCand">
+            <summary>任务板候选（官方 QuestScriptDef 语义：缩略卡 + 进度条 + 剩余时间）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.TitleCardCand">
+            <summary>头衔卡候选（官方 RoyalTitle 语义：名称 + 授予时间 + 许可勾叉）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.PsycastTreeCand">
+            <summary>心能树候选（官方 Psycast/Ability 语义：分层节点，已习得实心 / 锁定暗）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.IdeoCardCand">
+            <summary>文化卡候选（官方 Ideo/Precept 语义：名称 + 信条清单 + 领袖 + 成员数）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.CaravanPanelCand">
+            <summary>商队面板候选（官方 Caravan 语义：成员 + 负重 + 口粮 + ETA）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.GeneChipsCand">
+            <summary>基因芯片候选（官方 GeneDef 语义：类别色条 + 复杂度点数）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.MessageFeedCand">
+            <summary>瞬息消息流候选（官方 Messages 语义：不打断、按时间排序）。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandAtoms.PolicyCardCand">
+            <summary>政策卡候选（官方 Policies 语义：名称 + 摘要 + 应用人数）。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.WealthBreakdownCand)">
+            <summary>财富构成：转发至 OfficialDataAtoms.WealthBreakdown。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.RecordsTableCand)">
+            <summary>记录表：转发至 OfficialDataAtoms.RecordsTable。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.HistoryFeedCand)">
+            <summary>历史事件流：转发至 OfficialDataAtoms.HistoryFeed。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.TaleCardCand)">
+            <summary>传说卡：转发至 OfficialDataAtoms.TaleCard。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.LetterCardCand)">
+            <summary>信件归档卡：转发至 OfficialDataAtomsB.LetterCard。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.BillListCand)">
+            <summary>账单队列：转发至 OfficialDataAtomsB.BillList。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.QuestBoardCand)">
+            <summary>任务板：转发至 OfficialDataAtomsB.QuestBoard。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.TitleCardCand)">
+            <summary>头衔卡：转发至 OfficialDataAtomsB.TitleCard。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.PsycastTreeCand)">
+            <summary>心能树：转发至 OfficialDataAtomsB.PsycastTree。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.IdeoCardCand)">
+            <summary>文化卡：转发至 OfficialDataAtomsC.IdeoCard。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.CaravanPanelCand)">
+            <summary>商队面板：转发至 OfficialDataAtomsC.CaravanPanel。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.GeneChipsCand)">
+            <summary>基因芯片：转发至 OfficialDataAtomsC.GeneChips（gap 默认值已在 Build 处溯源）。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.MessageFeedCand)">
+            <summary>瞬息消息流：转发至 OfficialDataAtomsC.MessageFeed。</summary>
+        </member>
+        <member name="M:RUIF.OfficialDataCandAtoms.Build(UnityEngine.Rect,RUIF.OfficialDataCandAtoms.PolicyCardCand)">
+            <summary>政策卡：转发至 OfficialDataAtomsC.PolicyCard。</summary>
+        </member>
+        <member name="T:RUIF.OfficialDataCandFmt">
+            <summary>
+            ⑮ 官方数据候选组件（A/B/C 三族）的纯计算 Build 工厂。
+            <para>候选 readonly struct 同构于 DataCand：定义于 <see cref="T:RUIF.OfficialDataCandAtoms"/>（*CandAtoms 静态类内，
+            参见 <see cref="T:RUIF.DataCandAtoms"/> 的 BillEntry / FilterNode / TradeRow）；本文件同构 DataCandFmt——
+            <b>只放纯计算 Build 工厂、无 struct 定义</b>。绘制转发在 <see cref="T:RUIF.OfficialDataCandAtoms"/>.Build 中，
+            本文件零绘制逻辑（GATE-ARCH：候选层复用 Atoms/Fmt）。</para>
+            <para>契约（GATE-UI U1-U5）：Build 工厂纯计算、无状态；颜色默认溯源 Tokens（如 LetterCard tone=Tokens.Accent，
+            禁字面色相，U2）；字段类型严格对齐 OfficialDataAtoms* 的方法签名以保证 Draw 转发零转换。</para>
+            </summary>
+        </member>
+        <member name="F:RUIF.OfficialDataCandFmt.GeneChipsGapDefault">
+            <summary>GeneChips 的 gap 默认值（6f），溯源 OfficialDataAtomsC.GeneChips(Rect, …, float gap = 6f) 位置参数默认值。</summary>
+        </member>
         <member name="T:RUIF.RelationBand">
             <summary>
             关系档位（**语义**，与文案解耦）。消费者可据此自行渲染文案/图标；
@@ -1471,6 +3073,112 @@
         <member name="M:RUIF.PanelAtoms.SectionBar(UnityEngine.Rect,System.String,System.String,System.Boolean)">
             <summary>薄分段头（HUD 面板用）：折叠箭头 + 标题 + 右侧计数。</summary>
         </member>
+        <member name="T:RUIF.PanelCandAtoms">
+            <summary>④ 面板候选组件的单入口绘制。每个 Draw 为具名方法（与 <see cref="T:RUIF.PanelCandFmt"/> 的 Build 同名），
+            仅把候选 struct 的位置参数原样转发给对应的 PanelAtoms 原子；不持有状态（U3）、不切行高（U4）、不复制任何绘制逻辑（防漂移）。
+            参数对象（readonly struct）嵌套定义于本 static class 内。</summary>
+        </member>
+        <member name="T:RUIF.PanelCandAtoms.PanelStatRow">
+            <summary>统计行候选。label/value 必填；bar01 可空（空=不画条）；barColor 默认 <see cref="F:RUIF.Tokens.Accent"/>。</summary>
+        </member>
+        <member name="M:RUIF.PanelCandAtoms.StatRow(UnityEngine.Rect,RUIF.PanelCandAtoms.PanelStatRow)">
+            <summary>统计行：转发至 <see cref="M:RUIF.PanelAtoms.StatRow(UnityEngine.Rect,System.String,System.String,System.Nullable{System.Single},System.Nullable{UnityEngine.Color})"/>。</summary>
+        </member>
+        <member name="T:RUIF.PanelCandAtoms.PanelMiniProfileChip">
+            <summary>迷你档案条候选。initial/name/mood01/health01 必填。</summary>
+        </member>
+        <member name="M:RUIF.PanelCandAtoms.MiniProfileChip(UnityEngine.Rect,RUIF.PanelCandAtoms.PanelMiniProfileChip)">
+            <summary>迷你档案条：转发至 <see cref="M:RUIF.PanelAtoms.MiniProfileChip(UnityEngine.Rect,System.String,System.String,System.Single,System.Single)"/>。</summary>
+        </member>
+        <member name="T:RUIF.PanelCandAtoms.PanelFlashOverlay">
+            <summary>警示闪边候选。t 必填；color 默认 <see cref="F:RUIF.Tokens.Dead"/>；thickness 默认 2f（与 PanelAtoms.FlashOverlay 一致）。</summary>
+        </member>
+        <member name="M:RUIF.PanelCandAtoms.FlashOverlay(UnityEngine.Rect,RUIF.PanelCandAtoms.PanelFlashOverlay)">
+            <summary>警示闪边：转发至 <see cref="M:RUIF.PanelAtoms.FlashOverlay(UnityEngine.Rect,System.Single,System.Nullable{UnityEngine.Color},System.Single)"/>。</summary>
+        </member>
+        <member name="T:RUIF.PanelCandAtoms.PanelSectionBar">
+            <summary>分段头候选。title/count/expanded 必填（count 空串=不画计数）。</summary>
+        </member>
+        <member name="M:RUIF.PanelCandAtoms.SectionBar(UnityEngine.Rect,RUIF.PanelCandAtoms.PanelSectionBar)">
+            <summary>分段头：转发至 <see cref="M:RUIF.PanelAtoms.SectionBar(UnityEngine.Rect,System.String,System.String,System.Boolean)"/>。</summary>
+        </member>
+        <member name="T:RUIF.PanelCandFmt">
+            <summary>④ 面板候选组件（批4-2a 原子）的纯计算 Build。
+            参数对象（readonly struct）已迁移至 <see cref="T:RUIF.PanelCandAtoms"/> 内嵌套定义；此处仅把可选参数归一到令牌默认值，
+            返回对应的嵌套参数对象。可选 color 默认溯源 Tokens（如 barColor→Tokens.Accent、FlashOverlay→Tokens.Dead）。
+            注：StatRow 的 labelRatio/gap/barW 为 PanelAtoms 内部常量，不入候选（候选仅暴露原子公开位置参数，U1）。</summary>
+        </member>
+        <member name="T:RUIF.PawnTableHost">
+             <summary>
+             A0+ · 表格族的<b>原版框架桥</b>（第二轮取证 §1.2 ❌→✅ 的落地件）。
+            
+             <para><b>为什么是"桥"而不是"重写"</b>：原版 <c>RimWorld.PawnTable</c> 是一个完整表格引擎 ——
+             <c>PawnTableOnGUI(position)</c> 一行出表，内含：Def 驱动的列集合（<c>def.columns</c> 过滤
+             <c>Worker.VisibleCurrently</c>）、列宽协商（<c>GetMinWidth/GetMaxWidth/GetOptimalWidth</c>）、
+             逐列行高、内部滚动、以及<b>内置三态排序</b>（点表头 desc → asc → 清除，带
+             <c>SoundDefOf.Tick_High/Tick_Low</c> 音效与排序图标）。自研一遍只会更差。</para>
+            
+             <para><b>⚠️ 硬边界（实测）</b>：<c>PawnTable</c> 的行类型<b>硬编码为 <c>Pawn</c></b>
+             （构造签名 <c>PawnTable(PawnTableDef, Func&lt;IEnumerable&lt;Pawn&gt;&gt;, int, int)</c>、
+             <c>PawnsListForReading</c>）。因此本原子<b>只服务以 Pawn 为行的表</b>；非 Pawn 数据表只能借它的
+             范式（Def 列 + Worker 单元 + 宽度协商 + 三态排序）另建，不能套用本类。</para>
+            
+             <para><b>状态归属</b>：表实例由调用方的 <see cref="T:RUIF.PawnTableHost"/> 持有（框架自身零状态）。
+             宿主内部只在"Def 变了 / 尺寸变了"时重建或 <c>SetFixedSize</c>，
+             避免每帧 <c>SetDirty()</c> 触发 <c>RecacheIfDirty()</c> 全表重算。</para>
+            
+             <para><b>⚠️ 不要嵌进 RUIF 的滚动视口</b>：<c>PawnTable</c> 自带 <c>scrollPosition</c> 与内部
+             滚动条，再套一层 <see cref="M:RUIF.Layout.BeginScroll(UnityEngine.Rect,System.Single,UnityEngine.Vector2@,System.Boolean)"/> 会出现双滚动条与滚轮争抢。</para>
+             </summary>
+        </member>
+        <member name="P:RUIF.PawnTableHost.Table">
+            <summary>当前表实例（未创建时为 null）。</summary>
+        </member>
+        <member name="P:RUIF.PawnTableHost.TableDefName">
+            <summary>当前绑定的 PawnTableDef 名（未绑定时为 null）。</summary>
+        </member>
+        <member name="P:RUIF.PawnTableHost.LastError">
+            <summary>创建失败原因（Def 缺失 / 地图缺失时为非空，供 UI 显示）。</summary>
+        </member>
+        <member name="M:RUIF.PawnTableHost.Ensure(System.String,System.Func{System.Collections.Generic.IEnumerable{Verse.Pawn}},System.Single,System.Single)">
+            <summary>
+            按需建表 / 改尺寸。返回可绘制的表；返回 null 时 <see cref="P:RUIF.PawnTableHost.LastError"/> 说明原因。
+            </summary>
+        </member>
+        <member name="M:RUIF.PawnTableHost.MarkDirty">
+            <summary>标记数据脏（pawn 列表/数值变化后调用，下一帧重算）。</summary>
+        </member>
+        <member name="M:RUIF.PawnTableHost.Reset">
+            <summary>丢弃当前表（下次 <see cref="M:RUIF.PawnTableHost.Ensure(System.String,System.Func{System.Collections.Generic.IEnumerable{Verse.Pawn}},System.Single,System.Single)"/> 重建）。</summary>
+        </member>
+        <member name="P:RUIF.PawnTableHost.CreateFailed">
+            <summary>是否处于创建失败态（供 UI 决定是否重试）。</summary>
+        </member>
+        <member name="T:RUIF.PawnTableAtoms">
+            <summary>表格桥的绘制原子。</summary>
+        </member>
+        <member name="M:RUIF.PawnTableAtoms.CurrentMapColonists">
+            <summary>默认行集合：当前地图的自由殖民者（无地图时返回空）。</summary>
+        </member>
+        <member name="M:RUIF.PawnTableAtoms.PawnTableFrame(UnityEngine.Rect,RUIF.PawnTableHost,System.String,System.Func{System.Collections.Generic.IEnumerable{Verse.Pawn}},System.Boolean)">
+            <summary>
+            画一张原版 <c>PawnTable</c>（含内置表头排序 / 内部滚动 / 悬停高亮）。
+            </summary>
+            <param name="rect">整块区域（表会填满它；尺寸变化时宿主自动重设）。</param>
+            <param name="host">调用方持有的表宿主（持久状态）。</param>
+            <param name="tableDefName">原版 Def 名，如 <c>"Assign"</c> / <c>"Work"</c> / <c>"Restrict"</c> / <c>"Animals"</c>。</param>
+            <param name="pawnsGetter">行集合提供者；null ⇒ 用 <see cref="M:RUIF.PawnTableAtoms.CurrentMapColonists"/>。</param>
+            <param name="showStatusLine">是否在底部画一行排序状态回显（验证排序是否真的生效）。</param>
+            <returns>表是否成功绘制。</returns>
+        </member>
+        <member name="M:RUIF.PawnTableAtoms.CycleSort(System.String,System.Boolean,System.String,System.Boolean@)">
+            <summary>表头排序的一次循环推进（纯函数，供自建表复用同一语义）。</summary>
+            <param name="currentKey">当前排序键（null = 未排序）。</param>
+            <param name="currentDesc">当前是否降序。</param>
+            <param name="clickedKey">被点击的列键。</param>
+            <param name="descending">输出：推进后的降序状态。</param>
+            <returns>推进后的排序键（null = 清除排序）。</returns>
+        </member>
         <member name="T:RUIF.ProgressFmt">
             <summary>进度/容量原子的纯计算（可离线单测）。</summary>
         </member>
@@ -1483,6 +3191,18 @@
         <member name="M:RUIF.ProgressFmt.ZoomLabel(System.Single)">
             <summary>缩放值 → 百分比文本（钳制 0~1000%）。</summary>
         </member>
+        <member name="M:RUIF.ProgressFmt.RingSegments(System.Single,System.Single)">
+             <summary>
+             环形进度的**段数**：按每段 <paramref name="perSegDeg"/> 度（默认 3°，夹在 1–30）自适应，
+             结果夹在 **12–180** 段（小尺寸不断环、大尺寸不过密）。纯函数 ⇒ 可离线单测。
+            
+             <para>可达范围说明：默认 3°/段时整圈 = 120 段；**180 段上限**只在更细的
+             <paramref name="perSegDeg"/>（如 2°）时触及 —— 供高分辨率场景调用。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ProgressFmt.RingFilledSegments(System.Int32,System.Single)">
+            <summary>环形进度的**已填充段数**（四舍五入；0 表示空环、= 段数表示满环）。纯函数。</summary>
+        </member>
         <member name="M:RUIF.ProgressFmt.WipeWidth(System.Single,System.Single,System.Int32,System.Int32,System.Single)">
             <summary>
             斜向擦除：第 row 行（共 rows 行）的填充宽度。
@@ -1491,7 +3211,8 @@
         </member>
         <member name="T:RUIF.ProgressAtoms">
             <summary>
-            进度与容量原子（批4-2a）：斜向擦除 / 容量条（含超载虚线）/ 缩放指示。
+            进度与容量原子（批4-2a；v1.1 增补**弧形进度环**）：斜向擦除 / 容量条（含超载虚线）/
+            缩放指示 / 弧形进度环（ProgressRing）。
             无状态；进度与缩放值由调用方传入。
             </summary>
         </member>
@@ -1501,8 +3222,200 @@
         <member name="M:RUIF.ProgressAtoms.CapacityBar(UnityEngine.Rect,System.Single,System.Single,System.Nullable{UnityEngine.Color})">
             <summary>容量条：占用填充 + 接近满载变黄 + 超载时右端红色虚线段。</summary>
         </member>
+        <member name="M:RUIF.ProgressAtoms.ProgressRing(UnityEngine.Rect,System.Single,System.Nullable{UnityEngine.Color},System.Nullable{UnityEngine.Color},System.String,System.Single,System.Single)">
+             <summary>
+             **弧形进度环**（v1.1 首件 · **零贴图版**）：整圈轨道 + 按 <paramref name="progress01"/>
+             **顺时针**填充的进度弧，中心可放读数。12 点钟方向起始（与 <see cref="M:RUIF.Charts.DonutChart(UnityEngine.Rect,System.Single[],System.Single,System.String,UnityEngine.Color[],System.Single,System.Boolean)"/> 同口径）。
+            
+             <para><b>几何</b>：以 3° 一格的短弧段拼圆（与 DonutChart / Spinner 同一"零贴图"先例）；
+             段数与填充段数由 <see cref="M:RUIF.ProgressFmt.RingSegments(System.Single,System.Single)"/> / <see cref="M:RUIF.ProgressFmt.RingFilledSegments(System.Int32,System.Single)"/>
+             纯函数给出 ⇒ 跨端口径一致、可离线单测。
+             <b>不触碰 <c>GUI.matrix</c></b>（弧段用 cos/sin 直接定位、保持轴对齐）⇒ 与调用点所在作用域无关，
+             不受"外层平移/裁剪"影响。</para>
+            
+             <para><b>与 <see cref="M:RUIF.Industrial.Gauge(UnityEngine.Rect,System.Single,System.Single,System.Single,System.String,System.Single,System.Single)"/> 的分工</b>：Gauge 是**半环指针表盘**
+             （分区色 + 指针，表达"指标健康度"，如完好率/达成率）；本件是**整圈进度环**
+             （单值 0–1，表达"完成度 / 占用率 / 负载"，如产能利用率、库存水位）。
+             若要平滑弧（贴图/折线逼近）仍属 v1.1 素材件，本件是**非贴图原型版**（先可用后美化）。</para>
+             </summary>
+             <param name="progress01">进度 0–1（钳制）。</param>
+             <param name="track">空槽色；null ⇒ <see cref="F:RUIF.Tokens.BorderSoft"/>。</param>
+             <param name="fill">进度色；null ⇒ <see cref="F:RUIF.Tokens.Accent"/>。</param>
+             <param name="centerLabel">中心文本（可选，走 <see cref="P:RUIF.Tokens.FontValue"/>）。</param>
+             <param name="sweepDeg">扫掠角（默认整圈 360°；可用 270° 做"开口环"）。</param>
+             <param name="thickness01">环厚 / 外半径 比例（默认 0.22，夹在 0.08–0.6）。</param>
+        </member>
         <member name="M:RUIF.ProgressAtoms.ZoomIndicator(UnityEngine.Rect,System.Single,System.Single)">
             <summary>缩放指示 + 复位按钮；返回是否点击了「适配」。</summary>
+        </member>
+        <member name="T:RUIF.ProgressCandAtoms">
+            <summary>⑤ 进度候选组件的单入口绘制。每个 Draw 为具名方法（与 <see cref="T:RUIF.ProgressCandFmt"/> 的 Build 同名），
+            仅把候选 struct 的位置参数原样转发给对应的 ProgressAtoms 原子；不持有状态（U3）、不切行高（U4）、不复制任何绘制逻辑（防漂移）。
+            ZoomIndicator 的 Draw 保留原 bool 返回（U2）。参数对象（readonly struct）嵌套定义于本 static class 内。</summary>
+        </member>
+        <member name="T:RUIF.ProgressCandAtoms.ProgressFillWipe">
+            <summary>斜向擦除候选。progress01 必填；color 默认 <see cref="F:RUIF.Tokens.Accent"/>；rows 默认 10 / slant 默认 0.35f（与 ProgressAtoms.FillWipe 一致）。</summary>
+        </member>
+        <member name="M:RUIF.ProgressCandAtoms.FillWipe(UnityEngine.Rect,RUIF.ProgressCandAtoms.ProgressFillWipe)">
+            <summary>斜向擦除：转发至 <see cref="M:RUIF.ProgressAtoms.FillWipe(UnityEngine.Rect,System.Single,System.Nullable{UnityEngine.Color},System.Int32,System.Single)"/>。</summary>
+        </member>
+        <member name="T:RUIF.ProgressCandAtoms.ProgressCapacityBar">
+            <summary>容量条候选。used/capacity 必填；fill 可空（空→由 ProgressAtoms 按 r&gt;0.85?Warn:Alive 解析）。</summary>
+        </member>
+        <member name="M:RUIF.ProgressCandAtoms.CapacityBar(UnityEngine.Rect,RUIF.ProgressCandAtoms.ProgressCapacityBar)">
+            <summary>容量条：转发至 <see cref="M:RUIF.ProgressAtoms.CapacityBar(UnityEngine.Rect,System.Single,System.Single,System.Nullable{UnityEngine.Color})"/>。</summary>
+        </member>
+        <member name="T:RUIF.ProgressCandAtoms.ProgressRing">
+            <summary>弧形进度环候选。progress01 必填；track 默认 <see cref="F:RUIF.Tokens.BorderSoft"/>；fill 默认 <see cref="F:RUIF.Tokens.Accent"/>；centerLabel 可空；sweepDeg 默认 360f / thickness01 默认 0.22f（与 ProgressAtoms.ProgressRing 一致）。</summary>
+        </member>
+        <member name="M:RUIF.ProgressCandAtoms.Ring(UnityEngine.Rect,RUIF.ProgressCandAtoms.ProgressRing)">
+            <summary>弧形进度环：转发至 <see cref="M:RUIF.ProgressAtoms.ProgressRing(UnityEngine.Rect,System.Single,System.Nullable{UnityEngine.Color},System.Nullable{UnityEngine.Color},System.String,System.Single,System.Single)"/>。Build 方法名为 Ring，本 Draw 同名 Ring（与 struct ProgressRing 区分）。</summary>
+        </member>
+        <member name="T:RUIF.ProgressCandAtoms.ProgressZoomIndicator">
+            <summary>缩放指示候选。zoom 必填；resetValue 默认 1f（与 ProgressAtoms.ZoomIndicator 一致）；Draw 返回是否点击「适配」。</summary>
+        </member>
+        <member name="M:RUIF.ProgressCandAtoms.ZoomIndicator(UnityEngine.Rect,RUIF.ProgressCandAtoms.ProgressZoomIndicator)">
+            <summary>缩放指示：转发至 <see cref="M:RUIF.ProgressAtoms.ZoomIndicator(UnityEngine.Rect,System.Single,System.Single)"/>；保留原 bool 返回（U2）。</summary>
+        </member>
+        <member name="T:RUIF.ProgressCandFmt">
+            <summary>⑤ 进度候选组件（批4-2a 原子 + v1.1 弧形进度环）的纯计算 Build。
+            参数对象（readonly struct）已迁移至 <see cref="T:RUIF.ProgressCandAtoms"/> 内嵌套定义；此处仅把可选参数归一到令牌默认值，
+            返回对应的嵌套参数对象。可选 color 默认溯源 Tokens（fill→Tokens.Accent、track→Tokens.BorderSoft）。
+            CapacityBar.fill 的默认（r&gt;0.85?Warn:Alive）为 ProgressAtoms 内部条件默认，候选层保持可空、原样转发由原子解析（U2：默认值溯源 Fmt，不越俎代庖）。</summary>
+        </member>
+        <member name="T:RUIF.ReorderRowDrawer">
+            <summary>行绘制委托：<paramref name="dragging"/> = 该行正被拖动（由原版引擎判定）。</summary>
+        </member>
+        <member name="T:RUIF.ReorderAtoms">
+             <summary>
+             A0+ · 列表重排原子族 —— 桥接原版通用重排引擎 <c>Verse.ReorderableWidget</c>。
+            
+             <para><b>第二轮取证结论</b>：原《原版 UI 代码标准》把「列表拖拽重排」判为 ❌（无通用原版）
+             是<b>误判</b> —— <c>ReorderableWidget</c> 是完整成件，且框架钩子
+             （<c>ReorderableWidgetOnGUI_Before/AfterWindowStack</c>）已由 <c>RimWorld.UIRoot_Play</c>
+             每帧调用，<b>Mod 无需 Harmony</b>。</para>
+            
+             <para><b>白送的原版手感</b>：5px 起拖阈值、起拖/放下音效（<c>SoundDefOf.DragElement</c> /
+             <c>DropElement</c>）、2px 白色插入线、被拖行高亮。</para>
+            
+             <para><b>三条用法铁律（照抄原版 <c>ColonistBar</c> 的 <c>cachedReorderableGroups</c> 范式）</b>：</para>
+             <list type="number">
+             <item><b>组 id 必须由调用方缓存</b>（本类的 <c>ref groupId</c>）：<c>NewGroup</c> 在非 Repaint 帧
+             返回 <c>-1</c>，直接用它去登记会让后续 MouseDown 落在无效组上，<b>拖拽永远起不来</b>；</item>
+             <item><b>每帧都要重新登记</b>：框架在 <c>...AfterWindowStack</c> 里
+             <c>groups.Clear() / reorderables.Clear()</c>，<b>上一帧的登记不会保留</b>；</item>
+             <item><b>行数变化会中断拖拽</b>：<c>reorderables.Count != lastFrameReorderableCount</c> 时引擎自动
+             <c>StopDragging()</c>，列表增删行时要有心理准备（或自行延后提交）。</item>
+             </list>
+             </summary>
+        </member>
+        <member name="M:RUIF.ReorderAtoms.List(UnityEngine.Rect,System.Int32,System.Single,System.Int32@,RUIF.ReorderRowDrawer,System.Action{System.Int32,System.Int32},System.Boolean)">
+            <summary>
+            垂直行列表重排。<paramref name="groupId"/> 为调用方持有的持久状态（字段/捕获变量），
+            首次传 0 即可。返回「本帧是否处于拖拽中」。
+            </summary>
+            <param name="area">整组命中区（原版按此矩形判定拖动开始位置）。</param>
+            <param name="count">行数。</param>
+            <param name="rowHeight">行高（像素）。</param>
+            <param name="draw">行绘制回调（每行每帧调用一次）。</param>
+            <param name="onReorder">提交回调 <c>(fromIndex, insertIndex)</c>；建议内部转交 <see cref="M:RUIF.ReorderFmt.Move``1(System.Collections.Generic.IList{``0},System.Int32,System.Int32)"/>。</param>
+            <param name="highlightDragged">是否由引擎绘制被拖行高亮（默认开）。</param>
+        </member>
+        <member name="M:RUIF.ReorderAtoms.Grip(UnityEngine.Rect,System.Boolean)">
+            <summary>
+            行首握把（三点式）。命中区与行点击分离是原版 <c>GripHandle</c> 语义 —— 本原子只负责画出把手的
+            <b>可拖视觉提示</b>，真正的命中判定由 <see cref="M:RUIF.ReorderAtoms.List(UnityEngine.Rect,System.Int32,System.Single,System.Int32@,RUIF.ReorderRowDrawer,System.Action{System.Int32,System.Int32},System.Boolean)"/> 的整组矩形完成。
+            </summary>
+        </member>
+        <member name="T:RUIF.ReorderCandAtoms">
+             <summary>
+             ⑥ 列表重排候选层绘制转发：具名方法 List / Grip（与 <see cref="T:RUIF.ReorderCandFmt"/> 的 Build 工厂同名，已 == 对应 Build 名），
+             纯转发既有 <see cref="T:RUIF.ReorderAtoms"/>，禁复制逻辑。候选 readonly struct 嵌套定义于本 static class（对齐 DataCandAtoms.BillEntry / StatusCandAtoms.StatusPulseDot 写法）；
+             为避免与同名绘制方法（List / Grip）发生 C# 类型-成员命名冲突，struct 以族前缀命名为 <c>ReorderList</c> / <c>ReorderGrip</c>。
+            
+             <para><b>写回状态以入口 ref 参数承载（R8）</b>：跨帧状态持有者 groupId 不置于候选 struct 内——
+             R8 禁止候选 struct 持 ref 字段（亦守护 R3「Fmt 纯计算」边界），而是以入口 <c>ref int groupId</c> 参数承载，
+             与原 <see cref="M:RUIF.ReorderAtoms.List(UnityEngine.Rect,System.Int32,System.Single,System.Int32@,RUIF.ReorderRowDrawer,System.Action{System.Int32,System.Int32},System.Boolean)"/> 的持有方式完全同形，且正确写回归调用方。
+             此为<b>正式形态</b>（非 C#9 权宜）：候选 struct 仅打包值参数（count / rowHeight / draw / onReorder / highlightDragged）。
+             本工程 <c>LangVersion=9.0</c> 同样不支持 ref 字段，与 R8 一致，无版本升级诉求。</para>
+             </summary>
+        </member>
+        <member name="T:RUIF.ReorderCandAtoms.ReorderList">
+            <summary>列表重排候选（值参数包）。跨帧状态 groupId 由调用方经入口 ref 持有（R8）。</summary>
+        </member>
+        <member name="F:RUIF.ReorderCandAtoms.ReorderList.count">
+            <summary>行数。</summary>
+        </member>
+        <member name="F:RUIF.ReorderCandAtoms.ReorderList.rowHeight">
+            <summary>行高（像素）。</summary>
+        </member>
+        <member name="F:RUIF.ReorderCandAtoms.ReorderList.draw">
+            <summary>行绘制回调（每行每帧一次）。</summary>
+        </member>
+        <member name="F:RUIF.ReorderCandAtoms.ReorderList.onReorder">
+            <summary>提交回调 (fromIndex, insertIndex)；null 时内部退化为 Noop。</summary>
+        </member>
+        <member name="F:RUIF.ReorderCandAtoms.ReorderList.highlightDragged">
+            <summary>是否由引擎绘制被拖行高亮（默认开）。</summary>
+        </member>
+        <member name="T:RUIF.ReorderCandAtoms.ReorderGrip">
+            <summary>行首握把候选（值参数包，无状态）。color 默认 dragging?Accent:Dim（溯源 Tokens）。</summary>
+        </member>
+        <member name="F:RUIF.ReorderCandAtoms.ReorderGrip.dragging">
+            <summary>该行是否正被拖动。</summary>
+        </member>
+        <member name="F:RUIF.ReorderCandAtoms.ReorderGrip.color">
+            <summary>握把颜色（默认与 ReorderAtoms.Grip 同源：dragging?Accent:Dim，溯源 Tokens）。</summary>
+        </member>
+        <member name="M:RUIF.ReorderCandAtoms.List(UnityEngine.Rect,RUIF.ReorderCandAtoms.ReorderList,System.Int32@)">
+            <summary>垂直行列表重排：转发 ReorderAtoms.List；返回本帧是否处于拖拽中。</summary>
+        </member>
+        <member name="M:RUIF.ReorderCandAtoms.Grip(UnityEngine.Rect,RUIF.ReorderCandAtoms.ReorderGrip)">
+            <summary>行首握把（三点式）：转发 ReorderAtoms.Grip（颜色由 Atoms 内部按 dragging 决定，与 cand.color 同源）。</summary>
+        </member>
+        <member name="T:RUIF.ReorderCandFmt">
+            <summary>
+            ⑥ 列表重排候选层（参数对象 struct + Build，纯增量）：桥接既有 <see cref="T:RUIF.ReorderAtoms"/>。
+            仅打包「值参数」；跨帧状态持有者（groupId）按本工程 <c>LangVersion=9.0</c> 约束，
+            以 <c>ref</c> 形式走 <see cref="M:RUIF.ReorderCandAtoms.List(UnityEngine.Rect,RUIF.ReorderCandAtoms.ReorderList,System.Int32@)"/> 入口（见该文件说明），不进 struct 字段。
+            候选 readonly struct 已迁移至 <see cref="T:RUIF.ReorderCandAtoms"/> 内嵌套定义（对齐 DataCandAtoms.BillEntry / StatusCandAtoms.StatusPulseDot 写法，
+            并以族前缀 <c>ReorderList</c> / <c>ReorderGrip</c> 规避与同名绘制方法的 C# 命名冲突）；
+            本文件同构 StatusCandFmt——<b>只放纯计算 Build 工厂、无 struct 定义</b>（R3）。绘制转发在 <see cref="T:RUIF.ReorderCandAtoms"/>，零绘制逻辑（GATE-ARCH）。
+            </summary>
+        </member>
+        <member name="M:RUIF.ReorderCandFmt.List(System.Int32,System.Single,RUIF.ReorderRowDrawer,System.Action{System.Int32,System.Int32},System.Boolean)">
+            <summary>垂直行列表重排候选：返回 <see cref="T:RUIF.ReorderCandAtoms.ReorderList"/>；groupId 不在包内，由入口 ref 承载（R8）。</summary>
+        </member>
+        <member name="M:RUIF.ReorderCandFmt.Grip(System.Boolean,System.Nullable{UnityEngine.Color})">
+            <summary>行首握把候选：返回 <see cref="T:RUIF.ReorderCandAtoms.ReorderGrip"/>；color 默认 dragging?Accent:Dim（溯源 Tokens，禁散落魔法数）。</summary>
+        </member>
+        <member name="T:RUIF.ReorderFmt">
+             <summary>
+             A0+ · 重排的<b>纯计算层</b>（可离线单测，不碰 GUI）。
+            
+             <para><b>为什么单独抽出来</b>：原版 <c>ReorderableWidget</c> 回调给的是
+             <c>(fromIndex, insertIndex)</c>，其中 <c>insertIndex</c> 是<b>「元素移走之前」的插入下标</b>
+             —— 直接 <c>RemoveAt(from); Insert(to, item)</c> 在 <c>to &gt; from</c> 时会偏一位，
+             是这类交互最经典的一处差一错误。把它固化成纯函数 + 单测，比在每个调用点重推一遍可靠。</para>
+            
+             <para><b>回调语义（与原版实测一致）</b>：<c>ReorderableWidget</c> 在
+             <c>to == from</c> 或 <c>to == from + 1</c>（插回原位）时<b>不会</b>触发回调，本层同样提前返回。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.ReorderFmt.LandingIndex(System.Int32,System.Int32)">
+            <summary>元素最终落在的下标（<paramref name="insertIndex"/> 为移走前的插入位）。</summary>
+        </member>
+        <member name="M:RUIF.ReorderFmt.WillChange(System.Int32,System.Int32)">
+            <summary>这次回调是否真的会改变顺序（插回原位返回 false，与原版回调门槛一致）。</summary>
+        </member>
+        <member name="M:RUIF.ReorderFmt.Move``1(System.Collections.Generic.IList{``0},System.Int32,System.Int32)">
+            <summary>
+            原地重排：把 <paramref name="fromIndex"/> 处的元素移到 <paramref name="insertIndex"/>。
+            越界 / 插回原位一律静默返回（交互层不该因边界抛异常中断整帧绘制）。
+            </summary>
+        </member>
+        <member name="M:RUIF.ReorderFmt.Moved(System.Int32[],System.Int32,System.Int32)">
+            <summary>索引顺序数组的重排版本（返回新数组，不改原数组）。</summary>
         </member>
         <member name="T:RUIF.ShapesFmt">
             <summary>几何/装饰原子的纯计算（可离线单测）。</summary>
@@ -1605,6 +3518,59 @@
             ⚠️ 已知代价：真渐变需要横向渐变遮罩贴图（v1.1 素材项）；当前实现为纯色条+箭头（可用但无渐隐）。
             </summary>
         </member>
+        <member name="T:RUIF.StatusCandAtoms">
+            <summary>③ 状态候选组件的单入口绘制。每个 Draw 为具名方法（与 <see cref="T:RUIF.StatusCandFmt"/> 的 Build 同名），
+            仅把候选 struct 的位置参数原样转发给对应的 StatusAtoms 原子；不持有状态（U3）、不切行高（U4）、不复制任何绘制逻辑（防漂移）。
+            参数对象（readonly struct）嵌套定义于本 static class 内，对齐 DataCandAtoms 的 BillEntry/FilterNode/TradeRow 写法。</summary>
+        </member>
+        <member name="T:RUIF.StatusCandAtoms.StatusPulseDot">
+            <summary>呼吸点候选。color 默认 <see cref="F:RUIF.Tokens.Alive"/>；t 默认 0（静止于正弦中值）；minAlpha 默认 0.45f（与 <see cref="M:RUIF.StatusFmt.PulseAlpha(System.Single,System.Single)"/> 默认一致）。</summary>
+        </member>
+        <member name="F:RUIF.StatusCandAtoms.StatusPulseDot.color">
+            <summary>点颜色（已溯源令牌）。</summary>
+        </member>
+        <member name="F:RUIF.StatusCandAtoms.StatusPulseDot.t">
+            <summary>动画相位（调用方驱动）。</summary>
+        </member>
+        <member name="F:RUIF.StatusCandAtoms.StatusPulseDot.minAlpha">
+            <summary>最小 alpha（脉动下限）。</summary>
+        </member>
+        <member name="M:RUIF.StatusCandAtoms.PulseDot(UnityEngine.Rect,RUIF.StatusCandAtoms.StatusPulseDot)">
+            <summary>呼吸点：转发至 <see cref="M:RUIF.StatusAtoms.PulseDot(UnityEngine.Rect,UnityEngine.Color,System.Single,System.Single)"/>。</summary>
+        </member>
+        <member name="T:RUIF.StatusCandAtoms.StatusGlyph">
+            <summary>状态图形候选。kind 决定字形 + 令牌色；色由 <see cref="M:RUIF.StatusAtoms.Glyph(UnityEngine.Rect,RUIF.StatusKind)"/> / <see cref="M:RUIF.StatusFmt.GlyphOf(RUIF.StatusKind,System.String@,UnityEngine.Color@)"/> 映射，候选层不存色。</summary>
+        </member>
+        <member name="F:RUIF.StatusCandAtoms.StatusGlyph.kind">
+            <summary>状态种类。</summary>
+        </member>
+        <member name="M:RUIF.StatusCandAtoms.Glyph(UnityEngine.Rect,RUIF.StatusCandAtoms.StatusGlyph)">
+            <summary>状态图形：转发至 <see cref="M:RUIF.StatusAtoms.Glyph(UnityEngine.Rect,RUIF.StatusKind)"/>。</summary>
+        </member>
+        <member name="T:RUIF.StatusCandAtoms.StatusSpinner">
+            <summary>加载指示器候选。color 默认 <see cref="F:RUIF.Tokens.Accent"/>；segments=8 / radius=8f / size=3f 与 StatusAtoms.Spinner 默认一致；tex 非空走贴图重载。</summary>
+        </member>
+        <member name="M:RUIF.StatusCandAtoms.Spinner(UnityEngine.Rect,RUIF.StatusCandAtoms.StatusSpinner)">
+            <summary>加载指示器：tex 非空 → 贴图重载；否则 → 零贴图 float 重载（color 已在 Build 中溯源 Tokens.Accent）。</summary>
+        </member>
+        <member name="T:RUIF.StatusCandAtoms.StatusCaret">
+            <summary>展开箭头候选。progress01 驱动旋转过渡；color 默认 <see cref="F:RUIF.Tokens.Muted"/>。</summary>
+        </member>
+        <member name="M:RUIF.StatusCandAtoms.Caret(UnityEngine.Rect,RUIF.StatusCandAtoms.StatusCaret)">
+            <summary>展开箭头：转发至 <see cref="M:RUIF.StatusAtoms.Caret(UnityEngine.Rect,System.Single,System.Nullable{UnityEngine.Color})"/>。</summary>
+        </member>
+        <member name="T:RUIF.StatusCandAtoms.StatusScrollFadeHint">
+            <summary>滚动渐隐提示候选。moreBelow 决定是否绘制；viewport 即传入 rect（h=14f 为 StatusAtoms 内部常量，不入候选）。</summary>
+        </member>
+        <member name="M:RUIF.StatusCandAtoms.ScrollFadeHint(UnityEngine.Rect,RUIF.StatusCandAtoms.StatusScrollFadeHint)">
+            <summary>滚动渐隐提示：转发至 <see cref="M:RUIF.StatusAtoms.ScrollFadeHint(UnityEngine.Rect,System.Boolean)"/>。</summary>
+        </member>
+        <member name="T:RUIF.StatusCandFmt">
+            <summary>③ 状态候选组件（S2 第二批原子）的纯计算 Build。
+            参数对象（readonly struct）已迁移至 <see cref="T:RUIF.StatusCandAtoms"/> 内嵌套定义（对齐 DataCandAtoms 的 BillEntry/FilterNode/TradeRow 写法）；
+            此处仅负责把可选参数归一到令牌默认值，返回对应的嵌套参数对象。候选层不出现任何 new Color 字面色相。
+            绘制由 <see cref="T:RUIF.StatusCandAtoms"/> 的具名 Draw 方法原样转发给 StatusAtoms，零绘制逻辑。</summary>
+        </member>
         <member name="T:RUIF.SortState">
             <summary>排序状态（三态循环：无 → 升 → 降 → 无）。</summary>
         </member>
@@ -1624,7 +3590,34 @@
             <summary>值/参考值 → 0~1（参考值非正返回 0）。</summary>
         </member>
         <member name="M:RUIF.TableFmt.BandColor(System.Single)">
-            <summary>阈值带着色：&lt;0.34 低 / &lt;0.67 中 / 否则高（颜色取自令牌）。</summary>
+            <summary>
+            阈值带着色：&lt;0.34 低 / &lt;0.67 中 / 否则高（颜色取自令牌）。
+            <para>边界：0.34 与 0.67 归入**高档**（<c>&lt;</c> 开区间下界）。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.TableFmt.ColumnAlignOf(RUIF.StatCol[],System.Int32)">
+             <summary>
+             列样式表 → 该列**表头/数据格**共用的锚点（预览数值列表头亦右对齐）。
+            
+             <para>越界 / <paramref name="cols"/> 为 null ⇒ <see cref="F:UnityEngine.TextAnchor.MiddleLeft"/>
+             （与无列样式时的旧行为完全一致）。</para>
+             <para>锚点**只保留水平分量**（行内一律垂直居中）：<c>default(TextAnchor)</c> 是
+             <c>UpperLeft</c>，零初始化的 <c>StatCol</c> 若不归一化会把文本顶到行顶。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TableFmt.IsDimColumn(RUIF.StatCol[],System.Int32)">
+            <summary>该列是否用 <see cref="F:RUIF.Tokens.Dim"/> 前景（预览 `#` / 占比 / 参与季数列为 `--dim`）。
+            越界 / 无列样式 ⇒ false（= 旧行为：统一 <see cref="F:RUIF.Tokens.Text"/>）。</summary>
+        </member>
+        <member name="M:RUIF.TableFmt.IsBandCol(System.Int32,System.Int32)">
+            <summary>该列是否走阈值带色格。<paramref name="bandCol"/> &lt; 0 表示**无带色列**。</summary>
+        </member>
+        <member name="M:RUIF.TableFmt.BandTextOf(System.Single[],System.String[],System.Int32,System.Single)">
+            <summary>
+            带色列的**显示文本**：优先调用方提供的文本（如千分位 <c>6,980</c>）；
+            缺失（null / 空 / 下标越界）回退 <c>(value*scale).ToString("0.#")</c>；两者都缺 ⇒ 空串。
+            <para><paramref name="scale"/> 供"比例值按百分比显示"等场景换算（默认 1 = 原值）。</para>
+            </summary>
         </member>
         <member name="M:RUIF.TableFmt.ResizeWidth(System.Single,System.Single,System.Single,System.Single)">
             <summary>列宽拖动结果（钳制在 min~max）。</summary>
@@ -1647,7 +3640,17 @@
             <summary>可点击排序表头；返回是否被点击（调用方用 <see cref="M:RUIF.TableFmt.NextSort(RUIF.SortState)"/> 推进状态）。</summary>
         </member>
         <member name="M:RUIF.TableAtoms.ValueCell(UnityEngine.Rect,System.Single,System.Single)">
-            <summary>阈值着色数值单元（底为带色 22% 叠加）。</summary>
+            <summary>
+            阈值着色数值单元（**旧签名 · 保持字节级等价**）：文本由 <c>value.ToString("0.#")</c> 生成。
+            委托到文本透传重载（单一实现）。
+            </summary>
+        </member>
+        <member name="M:RUIF.TableAtoms.ValueCell(UnityEngine.Rect,System.String,System.Single,System.Single)">
+            <summary>
+            阈值着色数值单元（**文本透传**）：底为带色 22% 叠加、文字用同色右对齐。
+            <para>给千分位等**已格式化**文本用（如 <c>"6,980"</c>）——格式化规则归调用方（LOC-002：
+            数字格式与语言相关，不写死在组件里）。</para>
+            </summary>
         </member>
         <member name="M:RUIF.TableAtoms.ResizeHandle(UnityEngine.Rect,System.Single)">
             <summary>
@@ -1660,6 +3663,65 @@
         </member>
         <member name="M:RUIF.TableAtoms.DensitySwitch(UnityEngine.Rect,RUIF.RowDensity@)">
             <summary>行密度三档切换；返回是否变化。</summary>
+        </member>
+        <member name="T:RUIF.TableCandAtoms">
+            <summary>表格体系对接候选组件（原 📋，官方实证支持，现落地）：把 <c>TableAtoms</c> 接入
+            <c>MainTabWindow_PawnTable</c>（PawnTableDef 表格体系）的 UI 脚手架——可排序表头 + 冻结首列 +
+            密度切换的殖民民表框架。纯 presentational；真实 Pawn 数据绑定属集成件。
+            官方依据：<c>MainTabWindow_PawnTable</c> / <c>PawnTableDef</c> / <c>PawnColumnWorker</c>。</summary>
+        </member>
+        <member name="M:RUIF.TableCandAtoms.PawnTableFrame(UnityEngine.Rect,System.String[],System.String[][],System.Int32@,RUIF.SortState[],RUIF.RowDensity@)">
+            <summary>殖民民表框架：排序表头（点击推进三态）→ 冻结首列 + 密度感知的数据行。</summary>
+        </member>
+        <member name="T:RUIF.TexAtoms">
+             <summary>
+             A0 · 贴图原子族：把「原版没有的能力」（真渐变 / 真渐隐 / 任意画布 / 饼环）用
+             <see cref="T:RUIF.TexFmt"/> 算像素 + <see cref="T:RUIF.TexCache"/> 上屏的方式补齐。
+            
+             <para><b>为什么走贴图而不是描线</b>：原版 UI 侧无渐变 API、无多边形填充 API
+             （第二轮取证：全类型表检索 <c>Gradient</c> 只命中 <c>Verse.Noise.GradientPresets</c>）。
+             而原版自己造贴图有先例（<c>SolidColorMaterials.NewSolidColorTexture</c>）。
+             贴图路线的附加好处是<b>一次 draw call</b> —— 热力图 365 格从 365 次 <c>DrawBoxSolid</c>
+             降到 1 次 <c>GUI.DrawTexture</c>。</para>
+            
+             <para><b>降级契约</b>：贴图创建失败（非主线程 / 尺寸非法）时<b>不静默</b> ——
+             渐变退化为 12 段折线，其余直接不画并已由 <c>TexCache</c> 记录一次错误。</para>
+            
+             <para><b>绘制前一律把 <c>GUI.color</c> 置白</b>：颜色已烘进像素，
+             若沿用外层的染色状态会被二次相乘（这是"渐变发暗"的常见根因）。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.TexAtoms.GradientRect(UnityEngine.Rect,UnityEngine.Color,UnityEngine.Color,System.Boolean)">
+            <summary>线性渐变底（真渐变，1 次 draw call）。贴图不可用时降级为 12 段折线。</summary>
+        </member>
+        <member name="M:RUIF.TexAtoms.FadeRight(UnityEngine.Rect,UnityEngine.Color,System.Single)">
+            <summary>
+            右缘渐隐遮罩（真·渐隐截断）：在 <paramref name="rect"/> 右端盖一条
+            「alpha 0 → 1、RGB = <paramref name="bgColor"/>」的贴图，把文字尾部溶进背景。
+            <para><paramref name="bgColor"/> 必须是<b>文字背后的真实底色</b>，否则渐隐带会与底色不接。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.TexAtoms.FadeLeft(UnityEngine.Rect,UnityEngine.Color,System.Single)">
+            <summary>左缘渐隐遮罩（横向滚动列表的起始侧）。</summary>
+        </member>
+        <member name="M:RUIF.TexAtoms.Canvas(UnityEngine.Rect,System.Int64,System.Int32,System.Int32,UnityEngine.Color32[],System.String)">
+            <summary>
+            发布并绘制一块画布（热力图 / 甘特 / 桑基 / 任意自绘几何）。
+            <para><b>缓存键由调用方给</b>：内容变了必须换 key（把数据版本号编进
+            <see cref="M:RUIF.TexCache.KeyVersioned(System.Int32,System.Int32,System.Int32,System.Int32)"/> 是最省事的做法），否则会一直画旧图。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.TexAtoms.Heat(UnityEngine.Rect,System.Int32,System.Single[0:,0:],System.Single,System.Single,System.Boolean)">
+            <summary>
+            热力格网（值 → 五档色阶）。<paramref name="version"/> 变化才会重算像素。
+            <paramref name="flipY"/> = true 时 <c>grid[0,*]</c> 画在<b>顶部</b>（表格直觉）。
+            </summary>
+        </member>
+        <member name="M:RUIF.TexAtoms.Sector(UnityEngine.Rect,System.Int64,System.Single,System.Single,System.Single,UnityEngine.Color,System.Int32)">
+            <summary>
+            扇形 / 扇环（饼图、环图、仪表圆弧）。<paramref name="key"/> 需包含角度与颜色信息
+            （推荐 <see cref="M:RUIF.TexCache.KeyVersioned(System.Int32,System.Int32,System.Int32,System.Int32)"/> 把量化后的角度编进 version）。
+            </summary>
         </member>
         <member name="T:RUIF.TextFmt">
             <summary>
@@ -1719,6 +3781,41 @@
             返回实际绘制宽度。超出 rect 宽度的部分不裁剪（调用方控制 span 总长）。
             </summary>
         </member>
+        <member name="T:RUIF.TextCandAtoms">
+            <summary>① 文本候选组件的单入口绘制。每个 Draw 为具名方法（与 <see cref="T:RUIF.TextCandFmt"/> 的 Build 同名），
+            仅把候选 struct 的位置参数原样转发给对应的 TextAtoms 原子；不持有状态（U3）、不切行高（U4）、不复制任何绘制逻辑（防漂移）。
+            RichTextLine 的 Draw 保留原 float 返回（U2）。参数对象（readonly struct）嵌套定义于本 static class 内。</summary>
+        </member>
+        <member name="T:RUIF.TextCandAtoms.TextUnitLabel">
+            <summary>单位标签候选。value/unit 必填；valueFont 默认 <see cref="P:RUIF.Tokens.FontValue"/>（=GameFont.Medium）；color 默认 <see cref="F:RUIF.Tokens.Text"/>。</summary>
+        </member>
+        <member name="M:RUIF.TextCandAtoms.UnitLabel(UnityEngine.Rect,RUIF.TextCandAtoms.TextUnitLabel)">
+            <summary>单位标签：转发至 <see cref="M:RUIF.TextAtoms.UnitLabel(UnityEngine.Rect,System.String,System.String,Verse.GameFont,System.Nullable{UnityEngine.Color})"/>。</summary>
+        </member>
+        <member name="T:RUIF.TextCandAtoms.TextTypewriter">
+            <summary>打字机候选。text/progress01/font/color 必填（font、color 无默认，保持调用方显式意图）；anchor 默认 MiddleLeft。</summary>
+        </member>
+        <member name="M:RUIF.TextCandAtoms.Typewriter(UnityEngine.Rect,RUIF.TextCandAtoms.TextTypewriter)">
+            <summary>打字机：转发至 <see cref="M:RUIF.TextAtoms.Typewriter(UnityEngine.Rect,System.String,System.Single,Verse.GameFont,UnityEngine.Color,UnityEngine.TextAnchor)"/>。</summary>
+        </member>
+        <member name="T:RUIF.TextCandAtoms.TextSubtitleLine">
+            <summary>主副双行候选。main/sub 必填。</summary>
+        </member>
+        <member name="M:RUIF.TextCandAtoms.SubtitleLine(UnityEngine.Rect,RUIF.TextCandAtoms.TextSubtitleLine)">
+            <summary>主副双行：转发至 <see cref="M:RUIF.TextAtoms.SubtitleLine(UnityEngine.Rect,System.String,System.String)"/>。</summary>
+        </member>
+        <member name="T:RUIF.TextCandAtoms.TextRichTextLine">
+            <summary>混排文本行候选。spans 复用 <see cref="T:RUIF.RichSpan"/>[]；anchor 默认 MiddleLeft；defaultFont 默认 <see cref="P:RUIF.Tokens.FontBody"/>（=GameFont.Small）。</summary>
+        </member>
+        <member name="M:RUIF.TextCandAtoms.RichTextLine(UnityEngine.Rect,RUIF.TextCandAtoms.TextRichTextLine)">
+            <summary>混排文本行：转发至 <see cref="M:RUIF.TextAtoms.RichTextLine(UnityEngine.Rect,RUIF.RichSpan[],UnityEngine.TextAnchor,Verse.GameFont)"/>；保留原 float 返回（U2）。</summary>
+        </member>
+        <member name="T:RUIF.TextCandFmt">
+            <summary>① 文本候选组件（S2 第一批原子）的纯计算 Build。
+            参数对象（readonly struct）已迁移至 <see cref="T:RUIF.TextCandAtoms"/> 内嵌套定义；此处仅把可选参数归一到令牌默认值，
+            返回对应的嵌套参数对象。字段 = TextAtoms 对应原子的位置参数，默认值溯源 Tokens（valueFont→Tokens.FontValue、defaultFont→Tokens.FontBody、color→Tokens.Text）。
+            RichTextLine 复用既有 <see cref="T:RUIF.RichSpan"/> 数据 struct（U1：数据数组沿用既有数据 struct）。</summary>
+        </member>
         <member name="T:RUIF.VisualsFmt">
             <summary>布局视觉原子的纯计算（可离线单测）。</summary>
         </member>
@@ -1753,6 +3850,214 @@
             右缘渐隐文字：先画文本，再用<b>背景色</b>分段叠加递增 alpha 实现淡出。
             ✅ 但需要调用方传入已知背景色（bgColor）；真 alpha 遮罩版留 v1.1 素材项。
             </summary>
+        </member>
+        <member name="T:RUIF.VisualCandAtoms">
+            <summary>② 布局视觉候选组件的单入口绘制。每个 Draw 为具名方法（与 <see cref="T:RUIF.VisualCandFmt"/> 的 Build 同名），
+            仅把候选 struct 的位置参数原样转发给对应的 VisualAtoms 原子；不持有状态（U3）、不切行高（U4）、不复制任何绘制逻辑（防漂移）。
+            参数对象（readonly struct）嵌套定义于本 static class 内。</summary>
+        </member>
+        <member name="T:RUIF.VisualCandAtoms.VisualSwatch">
+            <summary>色卡候选。color 必填；selected 默认 false。</summary>
+        </member>
+        <member name="M:RUIF.VisualCandAtoms.Swatch(UnityEngine.Rect,RUIF.VisualCandAtoms.VisualSwatch)">
+            <summary>色卡：转发至 <see cref="M:RUIF.VisualAtoms.Swatch(UnityEngine.Rect,UnityEngine.Color,System.Boolean)"/>。</summary>
+        </member>
+        <member name="T:RUIF.VisualCandAtoms.VisualGradientBar">
+            <summary>渐变条候选。lo/hi 必填；segments 默认 16（与 VisualAtoms.GradientBar 一致）。</summary>
+        </member>
+        <member name="M:RUIF.VisualCandAtoms.GradientBar(UnityEngine.Rect,RUIF.VisualCandAtoms.VisualGradientBar)">
+            <summary>渐变条：转发至 <see cref="M:RUIF.VisualAtoms.GradientBar(UnityEngine.Rect,UnityEngine.Color,UnityEngine.Color,System.Int32)"/>。</summary>
+        </member>
+        <member name="T:RUIF.VisualCandAtoms.VisualPinBadge">
+            <summary>钉选角标候选。pinned 必填；color 默认 <see cref="F:RUIF.Tokens.Accent"/>；size 默认 12f / margin 默认 2f（与 VisualAtoms.PinBadge 一致）。</summary>
+        </member>
+        <member name="M:RUIF.VisualCandAtoms.PinBadge(UnityEngine.Rect,RUIF.VisualCandAtoms.VisualPinBadge)">
+            <summary>钉选角标：转发至 <see cref="M:RUIF.VisualAtoms.PinBadge(UnityEngine.Rect,System.Boolean,System.Nullable{UnityEngine.Color},System.Single,System.Single)"/>。</summary>
+        </member>
+        <member name="T:RUIF.VisualCandAtoms.VisualOverflowFade">
+            <summary>右缘渐隐文字候选。text/bgColor 必填；font 默认 <see cref="P:RUIF.Tokens.FontBody"/>（=GameFont.Small）；color 默认 <see cref="F:RUIF.Tokens.Text"/>；fadeWidth 默认 24f / segments 默认 8（与 VisualAtoms.OverflowFade 一致）。</summary>
+        </member>
+        <member name="M:RUIF.VisualCandAtoms.OverflowFade(UnityEngine.Rect,RUIF.VisualCandAtoms.VisualOverflowFade)">
+            <summary>右缘渐隐文字：转发至 <see cref="M:RUIF.VisualAtoms.OverflowFade(UnityEngine.Rect,System.String,UnityEngine.Color,Verse.GameFont,System.Nullable{UnityEngine.Color},System.Single,System.Int32)"/>。</summary>
+        </member>
+        <member name="T:RUIF.VisualCandFmt">
+            <summary>② 布局视觉候选组件（S2 第三批原子）的纯计算 Build。
+            参数对象（readonly struct）已迁移至 <see cref="T:RUIF.VisualCandAtoms"/> 内嵌套定义；此处仅把可选参数归一到令牌默认值，
+            返回对应的嵌套参数对象。字段 = VisualAtoms 对应原子的位置参数；color 必填项直接存 Color，可选 color 默认溯源 Tokens。
+            默认值（size=12f / margin=2f / fadeWidth=24f / segments=8 等）与 VisualAtoms 内部默认一致。</summary>
+        </member>
+        <member name="T:RUIF.WindowFmt">
+             <summary>
+             窗口骨架的<b>度量常量表</b>（方案 §5.1 / §5.2）。
+            
+             <para><b>基准裁决（§5.1）</b>：采用 <c>Dialog_MessageBox</c> 范式为<b>唯一</b>底栏基准 ——
+             它是 RimWorld 绝大多数对话框的共同父范式，用户肌肉记忆即「确认在最右」；
+             <c>Window.doCloseButton</c> 的 <c>h−55 / 120×40</c> <b>不作并列基准</b>（否则同一窗口出现两套节奏），
+             仅把「定宽居中」并入为 <c>n == 1</c> 特例。</para>
+            
+             <para><b>原版实测（1.6 反编译逐行核对）</b>：<c>Verse.Dialog_MessageBox.DoWindowContents</c> 尾段 ——
+             <c>num4 = buttonCText.NullOrEmpty() ? 2 : 3</c> · <c>num5 = inRect.width / num4</c> ·
+             <c>width2 = num5 − 10f</c> · 主按钮 <c>x = num5 * (num4 − 1) + 10f</c>、<c>y = inRect.height − 35f</c>、
+             高 <c>35f</c> ⇒ <b>主按钮最右且右缘贴内容区右缘</b>。本表即该范式的令牌化复现。</para>
+            
+             <para><b>与 <see cref="T:RUIF.WindowFrame"/> 的分工</b>：本类是<b>纯常量 + 纯几何</b>（可离线单测）；
+             <see cref="T:RUIF.WindowFrame"/> 只负责把 chrome 画出来。</para>
+             </summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.TitleHeight">
+            <summary>标题区高度（42f = <c>Dialog_MessageBox.TitleHeight</c>）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.ContentInset">
+            <summary>内容区水平内边距（18f = <c>Verse.Window.StandardMargin</c>）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.FooterHeight">
+            <summary>底栏带高（35f = <c>Dialog_MessageBox</c> 底带 = <c>MainButtonDef.ButtonHeight</c>）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.FooterButtonHeight">
+            <summary>底栏按钮高（35f，与带高同值）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.FooterInsetX">
+            <summary>底栏水平内缩（10f = <c>Dialog_MessageBox</c>）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.FooterGap">
+            <summary>底栏按钮间距（<b>0f，不加</b>）—— 间距由 <c>W/n − 10f</c> 的余量形成，<b>非叠加</b>。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.ButtonPadX">
+            <summary>按钮内容内边距（8f = <c>Tokens.SpaceXs</c> 派生，仅按钮内部）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.ButtonGapInner">
+            <summary>图标与文字间距（6f = <c>Tokens.SpaceXxs</c> 派生，仅按钮内部）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.MinButtonWidth">
+            <summary>底栏按钮最小可用宽（80f，§5.6 降级触发阈值）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.FocusRingOutset">
+            <summary>焦点环外扩（2f；与既有 <c>InputAtoms.StateSample</c> 逐值一致，§5.2 / §5.5）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.RuleHeight">
+            <summary>分隔线粗细（1f = <c>Tokens.RuleHeight</c>；绘制时须再过 <c>Px.HLine</c>）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.SingleButtonWidth">
+            <summary>单按钮特例尺寸（120×32 = <c>Dialog_Confirm.ButtonSize</c>；<c>n == 1</c> 时居中回落）。</summary>
+        </member>
+        <member name="F:RUIF.WindowFmt.SingleButtonHeight">
+            <summary>单按钮特例高度（32f = <c>Dialog_Confirm.ButtonSize</c>）。</summary>
+        </member>
+        <member name="P:RUIF.WindowFmt.TitleFont">
+            <summary>标题字体档（<c>Tokens.FontValue</c> = Medium；原版标题区即 Medium）。</summary>
+        </member>
+        <member name="M:RUIF.WindowFmt.TitleRect(UnityEngine.Rect)">
+            <summary>标题条矩形（贴顶，满宽）。</summary>
+        </member>
+        <member name="M:RUIF.WindowFmt.FooterRect(UnityEngine.Rect)">
+            <summary>底栏带矩形（贴底，满宽）—— 按钮几何一律以本矩形为基准。</summary>
+        </member>
+        <member name="M:RUIF.WindowFmt.ContentRect(UnityEngine.Rect)">
+            <summary>
+            内容区矩形：标题条之下、底栏带之上，左右各内缩 <see cref="F:RUIF.WindowFmt.ContentInset"/>。
+            <para>高度不足时返回 0 高矩形（<b>不外溢</b>），不抛异常。</para>
+            </summary>
+        </member>
+        <member name="M:RUIF.WindowFmt.FooterSlotX(UnityEngine.Rect,System.Int32,System.Int32)">
+            <summary>
+            底栏第 <paramref name="i"/> 槽的起点 x（槽宽 = <c>W/n</c>，<b>不含</b> <see cref="F:RUIF.WindowFmt.FooterInsetX"/>）。
+            </summary>
+        </member>
+        <member name="M:RUIF.WindowFmt.FooterButtonWidth(System.Single,System.Int32)">
+            <summary>
+            底栏按钮宽（<c>W/n − 10f</c>，§5.2 冻结式）。
+            </summary>
+            <param name="footerWidth">底栏带宽度（= 内容区宽 <c>W</c>）。</param>
+            <param name="n">按钮数。</param>
+        </member>
+        <member name="M:RUIF.WindowFmt.FooterButtonRect(UnityEngine.Rect,System.Int32,System.Int32)">
+             <summary>
+             底栏按钮矩形（<c>n ≥ 2</c> 的常规路径）。
+            
+             <para><b>几何</b>：<c>x = 带左缘 + i·(W/n) + 10f</c>、<c>w = W/n − 10f</c>、<c>h = 35f</c>。
+             由此得到三条观感：① <b>主按钮（末位）右缘贴带右缘</b>（右边距 0）；
+             ② <b>相邻按钮间隙 = <see cref="F:RUIF.WindowFmt.FooterInsetX"/>（10f）</b>，左边距同为 10f；
+             ③ 按钮宽逐值等于冻结式 <c>W/n − 10f</c>。</para>
+            
+             <para><b>⚠ 与原生的一处有意差异（已登记 · 方案 §5.6 A2 裁定）</b>：原版把 <c>+10f</c> <b>只加在主按钮</b>上
+             （B / C 落槽起点）⇒ 左边距 0，且相邻间隙<b>不统一</b>（一般 10f、主按钮前 20f）；本实现<b>对称加在每槽</b>
+             ⇒ 左边距 10f、间隙统一 10f、<b>主按钮右缘仍贴带右缘</b>（该特性保留），整体更规整。</para>
+             </summary>
+             <param name="footerRect">底栏带矩形（<see cref="M:RUIF.WindowFmt.FooterRect(UnityEngine.Rect)"/>）。</param>
+             <param name="n">按钮总数（≤1 请走 <see cref="M:RUIF.WindowFmt.SingleButtonRect(UnityEngine.Rect)"/>）。</param>
+             <param name="i">槽位下标，<b>0 = 最左</b>；主按钮取 <c>n − 1</c>（最右）。</param>
+        </member>
+        <member name="M:RUIF.WindowFmt.SingleButtonRect(UnityEngine.Rect)">
+            <summary>
+            <c>n == 1</c> 特例：<b>120×32 居中</b>（§5.1 裁决 ③ —— <c>W/1 − 10f</c> 在单按钮时近满宽，
+            与「单一确定 / 关闭」观感不符）。
+            </summary>
+        </member>
+        <member name="M:RUIF.WindowFmt.NeedsStack(System.Single,System.Int32)">
+            <summary>
+            底栏是否必须换档为 <b>D4 垂直堆叠</b>（§5.6）：单行等分已不足 <see cref="F:RUIF.WindowFmt.MinButtonWidth"/>。
+            </summary>
+        </member>
+        <member name="M:RUIF.WindowFmt.StackedHeight(System.Int32)">
+            <summary>D4 堆叠区总高（<c>n × 35f</c>，从内容区扣）。</summary>
+        </member>
+        <member name="M:RUIF.WindowFmt.StackedButtonRect(UnityEngine.Rect,System.Int32,System.Int32)">
+            <summary>
+            D4 堆叠区中第 <paramref name="i"/> 个按钮矩形（每行<b>全宽</b>钮，自上而下，行距 0）。
+            <para>⛔ 禁止带内换行、禁止压带高（35f 是度量，压到 22f 必切字）。</para>
+            </summary>
+        </member>
+        <member name="T:RUIF.WindowFrame">
+             <summary>
+             B2 · 窗口骨架（只有 chrome 的纯 <c>Rect</c> 骨架；方案 §5.1 / §5.2 / §5.4）。
+            
+             <para><b>职责边界（红线）</b>：<b>只画 chrome</b>（标题条 / 分隔线 / 底栏槽），交出
+             <c>contentRect</c> 与 <c>footerRect</c> 由调用方自行填内容与按钮。
+             <b>不触 <c>WindowStack</c>、不持窗口生命周期、不引用 <c>Verse.Window</c> 类型</b>
+             ⇒ 组件本身<b>不触发</b>任何交互（悬停反馈归宿主按钮；标题条不响应）。</para>
+            
+             <para><b>背景归属</b>：本组件<b>不画窗口底 / 不画外框</b> —— 宿主（如 <c>Verse.Window.doWindowBackground</c>）
+             拥有底色与外框；本组件只叠加标题条与两条分隔线，避免与宿主背景形成「双线」。</para>
+            
+             <para><b>零状态</b>：无任何字段，无 <c>static</c> 可变状态。</para>
+             </summary>
+        </member>
+        <member name="M:RUIF.WindowFrame.Draw(UnityEngine.Rect,System.String,UnityEngine.Rect@,UnityEngine.Rect@)">
+            <summary>
+            画骨架 chrome（标题条 + 标题下分隔线 + 底栏上分隔线），交出内容区与底栏槽。
+            <para>底栏按钮由调用方按 <see cref="M:RUIF.WindowFmt.FooterButtonRect(UnityEngine.Rect,System.Int32,System.Int32)"/> 逐个绘制
+            （主按钮取<b>末位</b> = 最右）；单按钮请用 <see cref="M:RUIF.WindowFmt.SingleButtonRect(UnityEngine.Rect)"/>。</para>
+            </summary>
+            <param name="rect">骨架外框（通常 = 窗口的 <c>DoWindowContents</c> 入参）。</param>
+            <param name="title">标题文案（调用方自行 <c>Tr.Get</c>；<c>null</c> 时不画标题但保留标题条高）。</param>
+            <param name="contentRect">内容区（标题下、底栏上，左右内缩 <see cref="F:RUIF.WindowFmt.ContentInset"/>）。</param>
+            <param name="footerRect">底栏带（贴底 35f 满宽；按钮几何以它为基准）。</param>
+        </member>
+        <member name="M:RUIF.WindowFrame.Draw(UnityEngine.Rect,System.String,System.Int32,UnityEngine.Rect@,UnityEngine.Rect@)">
+            <summary>
+            画骨架 chrome 并按按钮数自动走 §5.6 降级：<c>W/n − 10f ≥ 80f</c> 走底栏带（D0），
+            否则走 <b>D4 垂直堆叠</b>（每行全宽钮，<c>n × 35f</c> <b>从内容区扣</b>）。
+            </summary>
+            <param name="rect">骨架外框。</param>
+            <param name="title">标题文案。</param>
+            <param name="footerButtons">底栏按钮数（&lt;1 时按 1 处理）。</param>
+            <param name="contentRect">内容区（D4 时高度已扣除堆叠区）。</param>
+            <param name="footerRect">底栏带（D0）或堆叠区（D4）；按钮矩形由调用方自行切分。</param>
+            <remarks>
+            <b>D5 的归属</b>：堆叠总高仍超内容区时，本方法把堆叠区<b>夹到内容区高</b>（绝不画到容器外），
+            但「<c>BeginClip/EndClip</c> 成对 + 查看全部途径」须由<b>消费方</b>在绘制按钮时自行包裹 ——
+            方案 §5.8 未给该入口分配冻结键（新增键上限 ≤4），故本批不内置文案入口。
+            </remarks>
+        </member>
+        <member name="M:RUIF.WindowFrame.DefaultCloseLabel(System.String)">
+            <summary>
+            <c>n == 1</c> 特例按钮的默认文案：调用方 <paramref name="label"/> 为 <c>null</c> 时回退
+            <c>RUIF.Comp.Window.Close</c>（§5.8 键 <c>RUIF.Comp.Window.Close</c> 的唯一活跃调用点；
+            <b>组件内不内置英文默认串</b>）。
+            </summary>
+        </member>
+        <member name="M:RUIF.WindowFrame.DrawRule(System.Single,System.Single,System.Single)">
+            <summary>1px 分隔线：必须过 <see cref="M:RUIF.Px.HLine(System.Single,System.Single,System.Single)"/>（UI 缩放 &gt;1 时不过 Px 会糊成 2px 灰边）。</summary>
         </member>
     </members>
 </doc>

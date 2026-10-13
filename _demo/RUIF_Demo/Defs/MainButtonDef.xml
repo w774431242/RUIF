@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+
+  <!--
+    底栏入口按钮。走原版 MainButtonDef + MainButtonWorker 数据驱动体系：
+    这本身就是「第二轮取证：页签族 ✅」的现场验证 —— 无需 Harmony、无需自绘底栏，
+    只提供一个 Worker（Activate 为唯一必实现成员）即可获得原版的：
+      · 标签超宽自动缩写（ShortenedLabelCap）
+      · 悬停音效 SoundDefOf.Mouseover_Category
+      · 悬停位移 (+2,-2) 与 Tooltip（label 黄色 + description）
+      · 底栏 35px 高度与贴底定位（Anchor = Left）
+    ⚠️ 作用域（2026-09-12 取证修正）：本按钮只在**游戏内**出现 —— 底栏由 RimWorld.UIRoot_Play 的
+    mainButtonsRoot.MainButtonsOnGUI() 绘制，热键由同处 HandleLowPriorityShortcuts() 处理；
+    标题界面是 Verse.UIRoot_Entry，它不引用 MainButtonsRoot/MainButtonDef（只做 DoMainMenu + WindowStackOnGUI）。
+    因此 validWithoutMap=true 的真实含义是「没有当前地图时也不禁用」（星球视图/地图卸载态），
+    而不是「主菜单可用」。开档前的入口见 DemoMod 的 Mod 设置页。
+  -->
+  <MainButtonDef>
+    <defName>RUIF_DemoBench</defName>
+    <label>组件验证台</label>
+    <description>打开 RUIF 组件验证台：22 个页签逐件实机验证框架组件（原子 / 输入 / 数据 / 图表 / 反馈 / 导航 / 工业 / 桥接 / 互动 / 覆盖补全等）。</description>
+    <workerClass>RUIF.Demo.DemoButtonWorker</workerClass>
+    <order>95</order>
+    <!--
+      热键 F9 → F10（2026-10-04 修冲突）。
+      原因：原版 Core 已把 F1-F9 全部占用（Data/Core/Defs/Misc/MainButtonDefs/MainButtons.xml：
+      Work=F1、Schedule=F2、Assign=F3、Animals=F4、Wildlife=F5、Research=F6、Quests=F7、
+      World=F8、**History=F9**）⇒ 本按钮原先的 F9 与「历史」主标签撞键，
+      Player.log 每次启动都报 "Key binding conflict: MainTab_RUIF_DemoBench and
+      MainTab_History are both bound to F9"。F10 是原版未占用的下一个空位。
+    -->
+    <defaultHotKey>F10</defaultHotKey>
+    <validWithoutMap>true</validWithoutMap>
+    <minimized>false</minimized>
+    <closesWorldView>false</closesWorldView>
+  </MainButtonDef>
+
+</Defs>

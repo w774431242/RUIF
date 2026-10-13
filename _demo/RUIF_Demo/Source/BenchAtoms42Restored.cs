@@ -1,0 +1,3919 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using Verse;
+using RimWorld;
+using SliderCfg = RUIF.InputCandAtoms.SliderCfg;
+using FontScope = RUIF.Draw.FontScope;
+using Random = UnityEngine.Random;
+using System.Runtime.CompilerServices;
+
+namespace RUIF.Demo
+{
+// ⚠ 反编译产物缺修饰符：本类与 StdIds.gen.cs（标准编号表）是**同一个分部类**，
+//   故必须显式写 internal sealed **partial**，否则 CS0260。
+internal sealed partial class BenchAtoms42 : IBench
+{
+	private sealed class Atom
+	{
+		public string No;
+
+		public string Name;
+
+		public string Api;
+
+		public string Desc = "";
+
+		public string Note = "";
+
+		public string Badge = "ok";
+
+		public int DescLines = 1;
+
+		public float BodyH = 26f;
+
+		public float MinW = 60f;
+
+		public float MinH = LineTiny;
+
+		public bool Interactive;
+
+		public Action<Rect> Paint;
+	}
+
+	private sealed class Family
+	{
+		public string Title;
+
+		public string Sub;
+
+		/// <summary>★ 所属页签（组件分类）。取值见 <see cref="AllTabs"/>，由 <c>Build()</c> 统一打标。</summary>
+		public string Tab;
+
+		public readonly List<Atom> Items = new List<Atom>();
+
+		public void Add(Atom a)
+		{
+			Items.Add(a);
+		}
+
+		/// <summary>
+		/// 段头右上角的编号范围「最小–最大」。
+		/// <para><b>为什么不用首末件编号</b>：原实现是 <c>Items[0].No + "–" + Items[last].No</c> ——
+		/// 这只在段内编号**严格单调递增**时才等于范围。深挖补录的件（如输入族 43–56）是**追加**进
+		/// 既有段尾的，一旦某段被追加过，首末件就不再是极值，段头会显示成「56–42」这种倒序范围。
+		/// 改为按数值比较取极值（非数字编号退回序数比较，不抛异常）。</para>
+		/// </summary>
+		public string NoRange()
+		{
+			if (Items.Count == 0)
+			{
+				return string.Empty;
+			}
+			string lo = Items[0].No;
+			string hi = Items[0].No;
+			for (int i = 1; i < Items.Count; i++)
+			{
+				string s = Items[i].No;
+				if (CompareNo(s, lo) < 0)
+				{
+					lo = s;
+				}
+				if (CompareNo(s, hi) > 0)
+				{
+					hi = s;
+				}
+			}
+			// ⚠ 修复（2026-10-05）：原补零判据是「段内件数 < 10」，但 No 全部是两位字符串
+			//   （"01"…"66"）⇒ 段头实际渲染成「001–06」这种三位前缀。补零必须看**编号本身**的位数。
+			string pad = (lo.Length < 2) ? "0" : string.Empty;
+			return pad + lo + "–" + hi;
+		}
+
+		private static int CompareNo(string a, string b)
+		{
+			int x;
+			int y;
+			if (int.TryParse(a, out x) && int.TryParse(b, out y))
+			{
+				return x.CompareTo(y);
+			}
+			return string.CompareOrdinal(a, b);
+		}
+	}
+
+	private const float CardGap = 14f;
+
+	private const float PadX = 12f;
+
+	private const float DescTop = 9f;
+
+	private const float DemoPad = 11f;
+
+	private const float DemoMT = 10f;
+
+	private const float DemoMB = 12f;
+
+	private const float NoteGap = 7f;
+
+	private const float Border = 2f;
+
+	private static readonly float LineTiny = Measure.RowHeight((GameFont)0);
+
+	private static readonly float LineSmall = Measure.RowHeight((GameFont)1);
+
+	private static readonly float CtrlTiny = Measure.ControlHeight((GameFont)0);
+
+	private static readonly float HeadH = 9f + LineSmall + 2f + LineTiny;
+
+	private const float CardUnit = 414f;
+
+	private static readonly Color DemoBg = new Color(Tokens.Window.r * 0.55f + Tokens.Panel.r * 0.45f, Tokens.Window.g * 0.55f + Tokens.Panel.g * 0.45f, Tokens.Window.b * 0.55f + Tokens.Panel.b * 0.45f);
+
+	private readonly List<Family> families = new List<Family>();
+
+	private readonly List<Atom> cards = new List<Atom>();
+
+	private readonly HashSet<string> failed = new HashSet<string>();
+
+	internal static readonly string[] TableColumns = new string[4] { "名字", "心情", "工时", "击杀" };
+
+	private readonly SortState[] sortStates = (SortState[])(object)new SortState[TableColumns.Length];
+
+	private float t;
+
+	private int numMode;
+
+	private float typeProgress;
+
+	private float swatchSel;
+
+	private bool pinA;
+
+	private bool pinB;
+
+	private bool pinC;
+
+	private readonly bool[] eyeRows = new bool[6] { true, true, false, true, true, true };
+
+	private bool iconOn;
+
+	private bool caretOpen;
+
+	private bool moreBelow = true;
+
+	private RowDensity density = (RowDensity)1;
+
+	private float resizeX = 0.42f;
+
+	private float zoom = 0.86f;
+
+	private float wipe;
+
+	private float flash;
+
+	private bool gripOn;
+
+	private float spinP;
+
+	private bool spinDone;
+
+	private int tsMode;
+
+	private int glyphIdx;
+
+	private int aspectIdx = 1;
+
+	private float gradHover = -1f;
+
+	private int alertLv = 2;
+
+	private float planW = -1f;
+
+	private int planCols;
+
+	private float planTotal;
+
+	private const float SecH = 26f;
+
+	internal static readonly string[] WorkTypes = new string[20]
+	{
+		"建造", "烹饪", "制作", "医生", "灭火", "种植", "驯兽", "搬运", "狩猎", "采矿",
+		"研究", "锻造", "缝制", "监管", "清洁", "艺术", "割除", "基本", "就医", "休养"
+	};
+
+	internal static readonly string[] Names = new string[6] { "蓝 雪牛", "赤 眼镜蛇", "青 大地懒", "素 野猪", "赫 松鼠", "翠 羊驼" };
+
+	private readonly float[] cellMood = new float[6] { 62f, 38f, 88f, 51f, 74f, 45f };
+
+	private readonly int[] cellKill = new int[6] { 3, 17, 0, 9, 5, 12 };
+
+	private readonly int[] cellWork = new int[6] { 18400, 42100, 9700, 26300, 33900, 15200 };
+
+	private int budgetSpent = 72;
+
+	private int ovIdx;
+
+	private int ruleIdx;
+
+	private string shQuery = "建造";
+
+	private bool insetRaised;
+
+	private int researchIdx;
+
+	private int anchorIdx = 4;
+
+	private int cornerIdx;
+
+	private readonly bool[] secOpen = new bool[3] { true, false, true };
+
+	private float thinScroll;
+
+	private float frozenScroll;
+
+	internal static readonly string[] EventWords = new string[12]
+	{
+		"袭击", "寒流", "虫灾", "贸易商队", "太阳耀斑", "极光", "日蚀", "枯萎病", "猎杀人类", "心灵低语",
+		"陨石撞击", "家养动物加入"
+	};
+
+	internal static readonly string[] Research = new string[8] { "电力", "蓄电池", "水栽培", "空调", "枪械制作", "锻造", "岩石切割", "酿酒" };
+
+	private int segIdx;
+
+	private bool tglOn;
+
+	private int stepVal = 12;
+
+	private float sliderVal = 0.62f;
+
+	private bool keyArmed;
+
+	private readonly bool[] tagPicked = new bool[8] { true, false, false, true, false, false, false, false };
+
+	private float dsLo = 25f;
+
+	private float dsHi = 70f;
+
+	private Color cpColor = new Color(0.35f, 0.71f, 0.89f);
+
+	private float cpH = 0.573f;
+
+	private float cpS = 0.61f;
+
+	private float cpV = 0.89f;
+
+	private int cycIdx;
+
+	private string editText = "迫降乡";
+
+	private string editBuffer = "迫降乡";
+
+	private bool editing;
+
+	private readonly int[] pgVals = new int[12]
+	{
+		3, 2, 1, 1, 2, 4, 0, 1, 1, 1,
+		3, 2
+	};
+
+	private readonly int[] ttStates = new int[24];
+
+	private float ticksVal = 9f;
+
+	private readonly float[] batchVals = new float[3] { 21f, 64f, 78f };
+
+	private readonly SliderCfg[] batchCfg = (SliderCfg[])(object)new SliderCfg[3]
+	{
+		new SliderCfg
+		{
+			label = "温度上限",
+			min = -10f,
+			max = 40f,
+			unit = "°C"
+		},
+		new SliderCfg
+		{
+			label = "亮度",
+			min = 0f,
+			max = 100f,
+			unit = "%"
+		},
+		new SliderCfg
+		{
+			label = "音量",
+			min = 0f,
+			max = 100f,
+			unit = "%"
+		}
+	};
+
+	private static readonly string[] SkillRanks = new string[21]
+	{
+		"一窍不通", "不明就里", "初学乍练", "一知半解", "初窥门径", "恍然大悟", "略有小成", "渐入佳境", "得心应手", "出类拔萃",
+		"游刃有馀", "良工巧匠", "别具匠心", "炉火纯青", "一代大师", "登峰造极", "蜚声内外", "一代宗师", "蜚声寰宇", "举世无双",
+		"点石成金"
+	};
+
+	private int keyDown;
+
+	private int badgeSlot;
+
+	private int avatarSel = -1;
+
+	private int qualitySel = -1;
+
+	private bool skelLoaded;
+
+	private string sfQuery = "";
+
+	private string sfBuffer = "";
+
+	private float sfLast;
+
+	private bool pcSelected;
+
+	private bool sbOneCol;
+
+	private static readonly string[] SkillNames = new string[5] { "射击", "近战", "建造", "采矿", "烹饪" };
+
+	private static readonly float[] SkillBase = new float[5] { 14f, 6f, 18f, 9f, 11f };
+
+	private bool npFew;
+
+	private static readonly string[] NeedNames = new string[4] { "心情", "饮食", "休息", "娱乐" };
+
+	private static readonly float[] NeedValues = new float[4] { 0.82f, 0.64f, 0.91f, 0.23f };
+
+	private static readonly string[] NeedNamesFew = new string[2] { "心情", "娱乐" };
+
+	private static readonly float[] NeedValuesFew = new float[2] { 0.82f, 0.23f };
+
+	public bool Scrollable => true;
+
+	public float Height(float width)
+	{
+		Plan(width);
+		return planTotal + 2f;
+	}
+
+	private void Plan(float width)
+	{
+		if (Mathf.Abs(planW - width) < 0.5f)
+		{
+			return;
+		}
+		planW = width;
+		planCols = Mathf.Clamp(Mathf.FloorToInt((width + 14f) / 414f), 1, 3);
+		float cardW = (width - 14f * (float)(planCols - 1)) / (float)planCols;
+		float num = 0f;
+		for (int i = 0; i < families.Count; i++)
+		{
+			Family family = families[i];
+			num += 26f + LineTiny + (string.IsNullOrEmpty(family.Sub) ? 0f : LineTiny) + 6f;
+			int num2 = Mathf.CeilToInt((float)family.Items.Count / (float)planCols);
+			for (int j = 0; j < num2; j++)
+			{
+				float num3 = 0f;
+				for (int k = j * planCols; k < Mathf.Min((j + 1) * planCols, family.Items.Count); k++)
+				{
+					num3 = Mathf.Max(num3, CardH(family.Items[k], cardW));
+				}
+				num += num3 + 14f;
+			}
+			num += 10f;
+		}
+		planTotal = num;
+	}
+
+	private static float CardH(Atom a, float cardW)
+	{
+		float num = (string.IsNullOrEmpty(a.Desc) ? 0f : (9f + (float)a.DescLines * LineTiny));
+		float num2 = (string.IsNullOrEmpty(a.Note) ? 0f : (7f + LineTiny));
+		return 2f + HeadH + num + 10f + (22f + a.BodyH + num2) + 12f;
+	}
+
+	public BenchAtoms42()
+	{
+		//IL_003c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_013b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0140: Unknown result type (might be due to invalid IL or missing references)
+		//IL_01ce: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0204: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0205: Unknown result type (might be due to invalid IL or missing references)
+		//IL_020e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0244: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0245: Unknown result type (might be due to invalid IL or missing references)
+		//IL_024e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0284: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0285: Unknown result type (might be due to invalid IL or missing references)
+		Build();
+		for (int i = 0; i < families.Count; i++)
+		{
+			for (int j = 0; j < families[i].Items.Count; j++)
+			{
+				cards.Add(families[i].Items[j]);
+			}
+		}
+	}
+
+	public void Render(Rect area)
+	{
+		//IL_012d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_013a: Unknown result type (might be due to invalid IL or missing references)
+		//IL_015e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_01bb: Unknown result type (might be due to invalid IL or missing references)
+		//IL_01de: Unknown result type (might be due to invalid IL or missing references)
+		//IL_021b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0228: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0308: Unknown result type (might be due to invalid IL or missing references)
+		t += Time.deltaTime;
+		typeProgress = Mathf.Repeat(typeProgress + Time.deltaTime * 0.22f, 1.35f);
+		wipe = Mathf.Repeat(wipe + Time.deltaTime * 0.16f, 1.05f);
+		flash = Mathf.Repeat(flash + Time.deltaTime * 0.9f, 1f);
+		if (!spinDone)
+		{
+			spinP = Mathf.Min(100f, spinP + Time.deltaTime * 7f);
+			if (spinP >= 100f)
+			{
+				spinDone = true;
+			}
+		}
+		Plan(area.width);
+		float num = (area.width - 14f * (float)(planCols - 1)) / (float)planCols;
+		float num2 = area.y;
+		Rect card = default(Rect);
+		for (int i = 0; i < families.Count; i++)
+		{
+			Family family = families[i];
+			Draw.Label(new Rect(area.x, num2, area.width - 120f, 26f), family.Title, (GameFont)1, Tokens.Accent, (TextAnchor)3);
+			Draw.EllipsisLabel(new Rect(area.xMax - 120f, num2, 120f, 26f), family.NoRange(), (GameFont)0, Tokens.Dim, (TextAnchor)5);
+			num2 += 26f;
+			Draw.LineH(area.x, num2, area.width, Tokens.Border);
+			num2 += LineTiny;
+			if (!string.IsNullOrEmpty(family.Sub))
+			{
+				Draw.EllipsisLabel(new Rect(area.x, num2, area.width, LineTiny), family.Sub, (GameFont)0, Tokens.Muted, (TextAnchor)3);
+				num2 += LineTiny;
+			}
+			num2 += 6f;
+			int num3 = Mathf.CeilToInt((float)family.Items.Count / (float)planCols);
+			for (int j = 0; j < num3; j++)
+			{
+				int num4 = j * planCols;
+				int num5 = Mathf.Min(num4 + planCols, family.Items.Count);
+				float num6 = 0f;
+				for (int k = num4; k < num5; k++)
+				{
+					num6 = Mathf.Max(num6, CardH(family.Items[k], num));
+				}
+				for (int l = num4; l < num5; l++)
+				{
+					card = new Rect(area.x + (float)(l - num4) * (num + 14f), num2, num, CardH(family.Items[l], num));
+					PaintCard(card, family.Items[l]);
+				}
+				num2 += num6 + 14f;
+			}
+			num2 += 10f;
+		}
+	}
+
+	private void PaintCard(Rect card, Atom a)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0008: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0013: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_001e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_04ea: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0029: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0022: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0067: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+		//IL_008e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00ca: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00cb: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00d6: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00f1: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00ea: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00fc: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0528: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0534: Unknown result type (might be due to invalid IL or missing references)
+		//IL_011e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0117: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0161: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0185: Unknown result type (might be due to invalid IL or missing references)
+		//IL_018f: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0174: Unknown result type (might be due to invalid IL or missing references)
+		//IL_017e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_019a: Unknown result type (might be due to invalid IL or missing references)
+		//IL_01b4: Unknown result type (might be due to invalid IL or missing references)
+		//IL_01ad: Unknown result type (might be due to invalid IL or missing references)
+		//IL_01bf: Unknown result type (might be due to invalid IL or missing references)
+		//IL_01f8: Unknown result type (might be due to invalid IL or missing references)
+		//IL_01f1: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0238: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0244: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0288: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0294: Unknown result type (might be due to invalid IL or missing references)
+		//IL_02ed: Unknown result type (might be due to invalid IL or missing references)
+		//IL_02f9: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0377: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0379: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0384: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0397: Unknown result type (might be due to invalid IL or missing references)
+		//IL_038e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_039e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_041c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0441: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0466: Unknown result type (might be due to invalid IL or missing references)
+		bool flag = Mouse.IsOver(card);
+		Draw.Box(card, flag ? Tokens.CardHover : Tokens.Panel);
+		Draw.Border(card, flag ? Tokens.Accent : Tokens.Border);
+		Rect val = default(Rect);
+		val = new Rect(card.x + 1f, card.y + 1f, card.width - 2f, HeadH);
+		Draw.Box(val, Tokens.PanelRaised);
+		Draw.LineH(val.x, val.yMax - 1f, val.width, Tokens.Border);
+		Rect val2 = default(Rect);
+		val2 = new Rect(val.x + 12f, val.y + 9f, 26f, LineTiny + 1f);
+		Draw.Box(val2, Tokens.Card);
+		Draw.Border(val2, failed.Contains(a.No) ? Tokens.Dead : Tokens.BorderSoft);
+		Draw.Label(val2, a.No, (GameFont)0, failed.Contains(a.No) ? Tokens.Dead : Tokens.Dim, (TextAnchor)4);
+		Rect val3 = default(Rect);
+		val3 = new Rect(val.xMax - 12f - 34f, val.y + 9f, 34f, LineTiny + 1f);
+		Draw.Box(val3, (a.Badge == "ok") ? Draw.WithAlpha(Tokens.Alive, 0.14f) : Draw.WithAlpha(Tokens.Warn, 0.14f));
+		Draw.Border(val3, (a.Badge == "ok") ? Tokens.Alive : Tokens.Warn);
+		Draw.Label(val3, (a.Badge == "ok") ? "✅" : "⚠\ufe0f", (GameFont)0, (a.Badge == "ok") ? Tokens.Alive : Tokens.Warn, (TextAnchor)4);
+		Draw.EllipsisLabel(new Rect(val2.xMax + 5f, val.y + 9f, val3.x - val2.xMax - 10f, LineSmall), a.Name, (GameFont)1, Tokens.Text, (TextAnchor)3);
+		Draw.EllipsisLabel(new Rect(val.x + 12f, val.y + 9f + LineSmall + 2f, val.width - 24f, LineTiny), a.Api, (GameFont)0, Tokens.Info, (TextAnchor)3);
+		float num = val.yMax;
+		if (!string.IsNullOrEmpty(a.Desc))
+		{
+			Draw.EllipsisLabel(new Rect(card.x + 12f, num + 9f, card.width - 24f, (float)a.DescLines * LineTiny), a.Desc, (GameFont)0, Tokens.Muted, (TextAnchor)0);
+			num += 9f + (float)a.DescLines * LineTiny;
+		}
+		float num2 = (string.IsNullOrEmpty(a.Note) ? 0f : (7f + LineTiny));
+		Rect val4 = default(Rect);
+		val4 = new Rect(card.x + 12f, num + 10f, card.width - 24f, 22f + a.BodyH + num2);
+		Draw.Box(val4, DemoBg);
+		Draw.Border(val4, (a.Interactive && Mouse.IsOver(val4)) ? Tokens.Accent : Tokens.BorderSoft);
+		Rect val5 = default(Rect);
+		val5 = new Rect(val4.x + 11f, val4.y + 11f, val4.width - 22f, a.BodyH);
+		if (val5.width > 6f)
+		{
+			if (val5.width < a.MinW || val5.height < a.MinH)
+			{
+				PaintTooSmall(val5, a);
+			}
+			else if (failed.Contains(a.No))
+			{
+				PaintFailed(val5, a);
+			}
+			else
+			{
+				try
+				{
+					if (a.Paint != null)
+					{
+						a.Paint(val5);
+					}
+				}
+				catch (Exception ex)
+				{
+					failed.Add(a.No);
+					Log.ErrorOnce("[RUIF_Demo] 原子 " + a.No + " " + a.Name + " 的演示抛异常，已隔离（其余卡片不受影响）：\n" + ex, ("ruif.atom." + a.No).GetHashCode());
+					PaintFailed(val5, a);
+				}
+			}
+		}
+		if (num2 > 0f)
+		{
+			Draw.EllipsisLabel(new Rect(val5.x, val5.yMax + 7f, val5.width, LineTiny), a.Note, (GameFont)0, Tokens.Dim, (TextAnchor)3);
+		}
+	}
+
+	private static void PaintFailed(Rect body, Atom a)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0002: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0024: Unknown result type (might be due to invalid IL or missing references)
+		Draw.Border(body, Tokens.Dead);
+		Draw.EllipsisLabel(body, "⚠ " + a.No + " 演示异常 · 已隔离 · 详见日志", (GameFont)0, Tokens.Dead, (TextAnchor)4);
+	}
+
+	private static void PaintTooSmall(Rect body, Atom a)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0002: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0067: Unknown result type (might be due to invalid IL or missing references)
+		Draw.Border(body, Tokens.BorderSoft);
+		Draw.EllipsisLabel(body, "— 空间不足 · " + a.No + " 需 ≥ " + Mathf.RoundToInt(a.MinW) + "×" + Mathf.RoundToInt(a.MinH), (GameFont)0, Tokens.Dim, (TextAnchor)4);
+	}
+
+	private static void KBar(Rect rect, float p01, Color? fill = null)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0002: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_006c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0085: Unknown result type (might be due to invalid IL or missing references)
+		//IL_007c: Unknown result type (might be due to invalid IL or missing references)
+		Draw.Box(rect, Tokens.BorderHair);
+		Draw.Border(rect, Tokens.BorderSoft);
+		float num = Mathf.Max(0f, (rect.width - 2f) * Mathf.Clamp01(p01));
+		if (num > 0.5f)
+		{
+			Draw.Box(new Rect(rect.x + 1f, rect.y + 1f, num, rect.height - 2f), (Color)(fill ?? Tokens.Accent));
+		}
+	}
+
+	/// <summary>★ 页签（组件分类）全集 —— 与《RUIF组件总目》(docs/03-API与引擎取证) 的分类一致，也是页签栏的唯一来源。</summary>
+	internal static readonly string[] AllTabs = { "原子", "输入", "数据", "图表", "反馈", "导航", "工业与官方", "桥接" };
+
+	private string onlyTab;
+
+	/// <summary>
+	/// ★ 本实例只渲染该页签的族；null / 空 ⇒ 全部。
+	///
+	/// <para><b>必须是属性而非字段</b>：<c>Build()</c> 在**构造函数**里就跑完了，
+	/// 而对象初始化器 <c>new BenchAtoms42 { OnlyTab = … }</c> 是**构造函数之后**才赋值 ——
+	/// 若用字段，赋值时筛选早已错过，8 个实例会全部装上全部族（实机表现为「tab 能点但内容不变」）。
+	/// 故 setter 里清空并**重建**族列表。</para>
+	/// </summary>
+	internal string OnlyTab
+	{
+		get { return onlyTab; }
+		set
+		{
+			onlyTab = value;
+			families.Clear();     // Build() 是追加式的 ⇒ 必须先清，否则重复
+			cards.Clear();        // 展平缓存同样重建
+			Build();
+		}
+	}
+
+	private void Build()
+	{
+		BuildText();
+		BuildGeo();
+		BuildStatus();
+		BuildVisual();
+		BuildTable();
+		BuildPanel();
+		BuildInteract();
+		BuildProgress();
+		BuildMisc();
+		// ★ 分类（页签）：每构建完一批族就给它们打标签 —— 同页签的族连续渲染，页签栏据此生成
+		for (int i = 0; i < families.Count; i++) families[i].Tab = "原子";
+		int mark = families.Count;
+		BuildExt();
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "输入";
+		mark = families.Count;
+		BuildBase1();
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "数据";
+		mark = families.Count;
+		BuildDInput();
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "输入";
+		mark = families.Count;
+		BuildDData();
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "数据";
+		mark = families.Count;
+		BuildCharts();
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "图表";
+		mark = families.Count;
+		BuildFeedback();
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "反馈";
+		mark = families.Count;
+		BuildNav();
+		BuildNavStack();   // 导航扩展（108/109）：NavBackBar 活体栈 + JumpList 返回值消费
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "导航";
+		mark = families.Count;
+		BuildIndustrial();
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "工业与官方";
+		// 追加到「数据」页签（筛选按 Tab 值匹配，族在列表中的位置不影响归属）
+		mark = families.Count;
+		BuildDataEx();
+		for (int i = mark; i < families.Count; i++) families[i].Tab = "数据";
+		// ★ 标准编号：由 Api 里的方法名反查《RUIF组件总目》的编号（表见 StdIds.gen.cs），
+		//   写成「[INP-08] InputAtoms.SearchField(...)」—— 编号与总目、与族代号一一对应。
+		for (int i = 0; i < families.Count; i++)
+		{
+			for (int k = 0; k < families[i].Items.Count; k++)
+			{
+				Atom a = families[i].Items[k];
+				if (a.Api.StartsWith("[")) continue;          // 已编号（防御：Build 重复调用时不叠加）
+				string head = a.Api;
+				int par = head.IndexOf('(');
+				if (par > 0) head = head.Substring(0, par);
+				int dot = head.LastIndexOf('.');
+				if (dot >= 0) head = head.Substring(dot + 1);
+				int sep = head.LastIndexOf('·');               // 「组合范式 · StatChip」这类无框架方法，取 · 之后
+				if (sep >= 0) head = head.Substring(sep + 1).Trim();
+				string sid;
+				if (StdIds.TryGetValue(head, out sid)) a.Api = "[" + sid + "] " + a.Api;
+			}
+		}
+		// ★ 页签筛选：只留本页签的族
+		if (!string.IsNullOrEmpty(OnlyTab)) families.RemoveAll(IsOtherTab);
+		// ★ 空页签占位：本类尚无落地件时给一张「待落地」说明卡 —— 避免页签空白被误判成坏了，
+		//   同时把「本类目标是哪个文档」指出来（逐阶段落地时它就是进度板）。
+		if (families.Count == 0)
+		{
+			Family f0 = new Family
+			{
+				Title = OnlyTab + " · 待落地",
+				// 「桥接」特别说明：该族（PawnTable / Reorder / Hi）依赖**非滚动坐标**，
+				// 故其活体验收面是页签栏右侧那三个独立面，而不是本页签的卡片。
+				Sub = "本类在 RUIF 中已有实现，但尚未落地到本验证台 —— 目标清单见 docs/03-API与引擎取证/RUIF组件总目.md" +
+				      (OnlyTab == "桥接"
+				          ? "｜⚠ 桥接族的活体验收在右侧「拖拽重排 / 脉冲高亮 / 殖民者表」三个面（原版控件要求非滚动坐标，无法卡片化）"
+				          : ""),
+				Tab = OnlyTab
+			};
+			f0.Add(new Atom
+			{
+				No = "--",
+				Name = "待落地",
+				Api = "分类：「" + OnlyTab + "」",
+				Desc = "按《RUIF组件总目》与《宝典落地任务单》逐阶段补件；落地后本页签会自动收纳，无需改页签栏。",
+				Note = "空页签不是错误，是进度状态",
+				BodyH = 40f, MinW = 200f, MinH = 40f,
+				Paint = delegate(Rect rr)
+				{
+					Draw.EllipsisLabel(rr, "「" + OnlyTab + "」分类待落地 —— 见《RUIF组件总目》同名一节", GameFont.Small, Tokens.Dim, TextAnchor.MiddleLeft);
+				}
+			});
+			families.Add(f0);
+		}
+	}
+
+	/// <summary>页签筛选谓词（写成方法而非匿名委托，避免每帧分配）。</summary>
+	private bool IsOtherTab(Family x)
+	{
+		return x.Tab != OnlyTab;
+	}
+
+	private void BuildText()
+	{
+		Family family = new Family
+		{
+			Title = "A0 · 原子层 —— 文本原语",
+			Sub = "6 件 · TextFmt / TextAtoms（官方依据：Verse GenText / GenDate / Text.CalcSize）"
+		};
+		family.Add(new Atom
+		{
+			No = "01",
+			Name = "FormattedNumber",
+			Api = "TextFmt.FormatNumber(double) → string",
+			Interactive = true,
+			Desc = "千分位与单位自适应缩写（12 480 → 12.5k）。官方依据：Verse GenText 工具族。",
+			Note = "库存实时增长（钢铁 / 白银 / 零部件）· 切换格式档看同一数值的三种排法",
+			BodyH = 26f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0026: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0062: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0067: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0069: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0076: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0078: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c7: Unknown result type (might be due to invalid IL or missing references)
+				HStack val6 = Layout.Row(r, 6f);
+				HStack val7 = Layout.Row(val6.Take(r.width - 150f), 6f);
+				double[] array2 = new double[4] { 12480.0, 284312.0, 469.0, 1400000.0 };
+				for (int i = 0; i < array2.Length; i++)
+				{
+					Rect rest3 = val7.Rest;
+					Rect val8 = val7.Take(Mathf.Min(rest3.width, 88f));
+					Draw.Box(val8, Tokens.Card);
+					Draw.Border(val8, Tokens.BorderSoft);
+					string text = ((numMode == 2) ? ((long)array2[i]).ToString() : ((numMode == 1) ? ((long)array2[i]).ToString("N0") : TextFmt.FormatNumber(array2[i])));
+					Draw.EllipsisLabel(val8, text, (GameFont)1, Tokens.Accent, (TextAnchor)4);
+				}
+				InputAtoms.Segmented(Isset(val6.Rest, 0f, CtrlTiny), new string[3] { "缩写", "千分位", "原值" }, ref numMode);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "02",
+			Name = "TimeStamp",
+			Api = "TextAtoms.DateFull(long, Vector3) + NavFmt.RelativeTime(float)",
+			Desc = "刻 → 游戏内日期时间 / 相对时间（「3 天之前」）。全框架统一时间语义。",
+			Note = "随时钟推进——相对档会从「刚刚」变成「1 小时之前」",
+			BodyH = CtrlTiny + 5f + LineTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0018: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0023: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0063: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0075: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0092: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0098: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00bc: Unknown result type (might be due to invalid IL or missing references)
+				//IL_014d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0153: Unknown result type (might be due to invalid IL or missing references)
+				//IL_015e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_016c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_017c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0108: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0118: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0126: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0136: Unknown result type (might be due to invalid IL or missing references)
+				long num3 = ((Find.TickManager != null) ? Find.TickManager.TicksGame : 0);
+				VStack val4 = Layout.Column(r, 5f);
+				InputAtoms.Segmented(val4.Take(CtrlTiny), new string[3] { "绝对", "相对", "混合" }, ref tsMode);
+				Rect rest2 = val4.Rest;
+				HStack val5 = Layout.Row(val4.Take(rest2.height), 10f);
+				if (tsMode == 0)
+				{
+					Draw.EllipsisLabel(val5.Take(200f), TextAtoms.DateFull(num3, Vector3.zero), (GameFont)1, Tokens.Text, (TextAnchor)3);
+					Draw.EllipsisLabel(val5.Rest, "1 天 = 60000 tick（官方口径）", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+				}
+				else if (tsMode == 1)
+				{
+					Draw.EllipsisLabel(val5.Take(78f), NavFmt.RelativeTime(42f), (GameFont)0, Tokens.Info, (TextAnchor)3);
+					Draw.EllipsisLabel(val5.Take(78f), NavFmt.RelativeTime(3700f), (GameFont)0, Tokens.Info, (TextAnchor)3);
+					Draw.EllipsisLabel(val5.Rest, NavFmt.RelativeTime(260000f), (GameFont)0, Tokens.Muted, (TextAnchor)3);
+				}
+				else
+				{
+					Draw.EllipsisLabel(val5.Take(200f), TextAtoms.DateFull(num3, Vector3.zero), (GameFont)1, Tokens.Text, (TextAnchor)3);
+					Draw.EllipsisLabel(val5.Rest, NavFmt.RelativeTime(42f), (GameFont)0, Tokens.Info, (TextAnchor)3);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "03",
+			Name = "UnitLabel",
+			Api = "TextAtoms.UnitLabel(Rect, string, string, GameFont, Color?)",
+			Desc = "数值 + 单位对齐排版（数值 Medium 右对齐、单位 Tiny 灰）。KPI 卡与电力条的内嵌原子。",
+			Note = "三行共用同一右边界——单位列宽由最长单位撑开，不是各排各的",
+			BodyH = 92f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0019: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0049: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0058: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0079: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0088: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008d: Unknown result type (might be due to invalid IL or missing references)
+				VStack val3 = Layout.Column(r, 2f);
+				TextAtoms.UnitLabel(val3.Take(Measure.RowHeight(Tokens.FontValue)), "12 480", "件", Tokens.FontValue, (Color?)Tokens.Accent);
+				TextAtoms.UnitLabel(val3.Take(Measure.RowHeight(Tokens.FontValue)), "469", "W", Tokens.FontValue, (Color?)Tokens.Info);
+				TextAtoms.UnitLabel(val3.Take(Measure.RowHeight(Tokens.FontValue)), "86", "%", Tokens.FontValue, (Color?)Tokens.Alive);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "04",
+			Name = "RichTextLine 内联混排",
+			Api = "TextAtoms.RichTextLine(Rect, RichSpan[], TextAnchor, GameFont) → float",
+			Desc = "单行混排：变色词 / 加粗词 / 内嵌小图标。超越标签能力的样式按 span 分段拼接绘制。",
+			Note = "RichSpan(text, Color?, GameFont?) · 返回已消费高度",
+			BodyH = 62f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0031: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0036: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0055: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0066: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0070: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00af: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00cd: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0108: Unknown result type (might be due to invalid IL or missing references)
+				//IL_010d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0119: Unknown result type (might be due to invalid IL or missing references)
+				//IL_012c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0131: Unknown result type (might be due to invalid IL or missing references)
+				//IL_013d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0147: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0151: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0156: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0162: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0175: Unknown result type (might be due to invalid IL or missing references)
+				//IL_017a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0180: Unknown result type (might be due to invalid IL or missing references)
+				TextAtoms.RichTextLine(Isset(r, 0f, 30f), (RichSpan[])(object)new RichSpan[5]
+				{
+					new RichSpan("蓝 雪牛 ", (Color?)Tokens.Accent, (GameFont?)null),
+					new RichSpan("完成了 ", (Color?)Tokens.Text, (GameFont?)null),
+					new RichSpan("大师级", (Color?)Tokens.Warn, (GameFont?)Tokens.FontValue),
+					new RichSpan(" 突击步枪 ", (Color?)Tokens.Text, (GameFont?)null),
+					new RichSpan("声望 +2", (Color?)Tokens.Alive, (GameFont?)null)
+				}, (TextAnchor)3, Tokens.FontBody);
+				TextAtoms.RichTextLine(Isset(r, 31f, 30f), (RichSpan[])(object)new RichSpan[4]
+				{
+					new RichSpan("赤 眼镜蛇 ", (Color?)Tokens.Accent, (GameFont?)null),
+					new RichSpan("在裁缝台上做出了 ", (Color?)Tokens.Text, (GameFont?)null),
+					new RichSpan("传奇级", (Color?)Tokens.Warn, (GameFont?)Tokens.FontValue),
+					new RichSpan(" 布制大衣", (Color?)Tokens.Text, (GameFont?)null)
+				}, (TextAnchor)3, Tokens.FontBody);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "05",
+			Name = "Typewriter 逐字浮现",
+			Api = "TextAtoms.Typewriter(Rect, string, float, GameFont, Color, TextAnchor)",
+			Desc = "按进度逐字显示——事件叙事与信件的开场仪式感。点击即显全文（跳过）。",
+			Note = "进度随真实时间推进 · 跳过 / 重播（交互回补）",
+			BodyH = 54f + CtrlTiny + 4f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0018: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0023: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0041: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0053: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0058: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0076: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0080: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0085: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0146: Unknown result type (might be due to invalid IL or missing references)
+				string[] array = new string[2] { "殖民地第一天，没有墙，也没有床，只有一堆迫降残骸和四张惊恐的脸。", "医疗帐篷里油灯昏黄，医生用最后一株草药保住了病人的腿。" };
+				VStack val = Layout.Column(r, 4f);
+				int num = Mathf.FloorToInt(typeProgress);
+				float num2 = typeProgress - (float)num;
+				TextAtoms.Typewriter(val.Take(54f), array[num % array.Length], Mathf.Clamp01(num2), Tokens.FontBody, Tokens.Text, (TextAnchor)0);
+				Rect rest = val.Rest;
+				HStack val2 = Layout.Row(val.Take(rest.height), 6f);
+				if (Widgets.ButtonText(val2.Take(64f), "跳过", true, true, true, (TextAnchor?)null))
+				{
+					typeProgress = 1.34f;
+				}
+				if (Widgets.ButtonText(val2.Take(64f), "重播", true, true, true, (TextAnchor?)null))
+				{
+					typeProgress = 0f;
+				}
+				Draw.EllipsisLabel(val2.Rest, "第 " + (num + 1) + " 段 · " + Mathf.RoundToInt(Mathf.Clamp01(num2) * 100f) + "%", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "06",
+			Name = "SubtitleLine 主注双行",
+			Api = "TextAtoms.SubtitleLine(Rect, string main, string sub)",
+			Desc = "主文案 + 来源/翻译小注，两行同宽基线对齐（本地化场景：译文 + 原文对照）。",
+			Note = "职称档位与英文原文对照 · 悬停看原文由调用方实现",
+			BodyH = 78f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0021: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002c: Unknown result type (might be due to invalid IL or missing references)
+				TextAtoms.SubtitleLine(Isset(r, 0f, 38f), "总工程师 · 部落工匠", "职称档位 T4 · Chief Engineer");
+				TextAtoms.SubtitleLine(Isset(r, 39f, 38f), "首席医师 · 医者", "职称档位 T3 · Chief Medical Officer");
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildGeo()
+	{
+		Family family = new Family
+		{
+			Title = "A0 · 原子层 —— 几何与装饰",
+			Sub = "6 件 · Atoms / Shapes（零贴图实现）"
+		};
+		family.Add(new Atom
+		{
+			No = "07",
+			Name = "SectionFrame 组框",
+			Api = "Atoms.SectionFrame(Rect, string) → Rect（内容区）",
+			Desc = "带标题的 fieldset 组框：标题嵌于上边线断口处。返回内容区矩形，调用方直接在返回区排版。",
+			Note = "返回值即内容区（已含内边距）——不要再套一层 Inset",
+			BodyH = 86f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0006: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0012: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0017: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0029: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0034: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0047: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0065: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0078: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0083: Unknown result type (might be due to invalid IL or missing references)
+				FontScope val5 = Draw.Font(Tokens.FontLabel);
+				Rect val6;
+				try
+				{
+					val6 = Atoms.SectionFrame(r, "采集规则 · 储存区");
+				}
+				finally
+				{
+					((IDisposable)val5).Dispose();
+				}
+				VStack val7 = Layout.Column(val6, 2f);
+				Draw.EllipsisLabel(val7.Take(LineTiny), "优先储存\u3000钢铁 / 零部件", (GameFont)0, Tokens.Text, (TextAnchor)3);
+				Draw.EllipsisLabel(val7.Take(LineTiny), "允许腐烂\u3000否", (GameFont)0, Tokens.Text, (TextAnchor)3);
+				Draw.EllipsisLabel(val7.Take(LineTiny), "优先级\u3000\u3000重要", (GameFont)0, Tokens.Warn, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "08",
+			Name = "CornerFrame HUD 角框",
+			Api = "Shapes.CornerFrame(Rect, Color, float armLen, float thickness)",
+			Desc = "只画四个 L 角（各两段线）——指挥台 / 选中态 / 镜头框气质，比全边框更「军事 HUD」。",
+			Note = "规格对齐预览 .corner{56px} + i{14px} · 悬停张开 / 点击切换目标（交互回补）",
+			BodyH = 56f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0059: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0078: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0071: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0084: Unknown result type (might be due to invalid IL or missing references)
+				string[] array2 = new string[4] { "走廊防线\u3000HP 480 / 480", "储藏区 A\u3000库存 12 480", "太阳能阵列\u30001 100 W", "手术台\u3000医疗 91%" };
+				bool flag = Mouse.IsOver(r);
+				Shapes.CornerFrame(r, flag ? Tokens.Info : Tokens.Accent, flag ? 20f : 14f, 2f);
+				Draw.EllipsisLabel(r, array2[Mathf.Clamp(cornerIdx, 0, array2.Length - 1)], (GameFont)0, flag ? Tokens.Text : Tokens.Muted, (TextAnchor)4);
+				if (Widgets.ButtonInvisible(r, true))
+				{
+					cornerIdx = (cornerIdx + 1) % array2.Length;
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "09",
+			Name = "GradientRule 渐变分隔线",
+			Api = "Shapes.GradientRule(Rect, Color, int segments)",
+			Desc = "accent → 透明的渐隐分隔线。零贴图实现：8~12 段 alpha 递减折线拼接，纯原生。",
+			Note = "预览 .gradrule{height:2px}；段数由调用方给定",
+			BodyH = 30f,
+			Paint = delegate(Rect r)
+			{
+				//IL_000a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0026: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+				Shapes.GradientRule(new Rect(r.x, r.center.y - 1f, r.width, 2f), Tokens.Accent, 12);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "10",
+			Name = "RuleWithLabel 带字分割线",
+			Api = "Shapes.RuleWithLabel(Rect, string, Color, float gap)",
+			Desc = "线中断字（── 历史记录 ──），长页面语义分段。线宽由 label 反推，两侧自动等长。",
+			Note = "两段共用一个分段名列表 · 换一段（交互回补）",
+			BodyH = 50f + CtrlTiny + 4f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0030: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0035: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0047: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0054: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0064: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0079: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00bd: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00fc: Unknown result type (might be due to invalid IL or missing references)
+				string[] array = new string[5] { "历 史 记 录", "建 造 清 单", "战 斗 履 历", "研 究 队 列", "贸 易 记 录" };
+				FontScope val3 = Draw.Font(Tokens.FontLabel);
+				try
+				{
+					Shapes.RuleWithLabel(Isset(r, 2f, 18f), array[ruleIdx], Tokens.BorderSoft, 9f);
+					Shapes.RuleWithLabel(Isset(r, 26f, 18f), "战 斗 履 历", Tokens.Accent, 9f);
+				}
+				finally
+				{
+					((IDisposable)val3).Dispose();
+				}
+				HStack val4 = Layout.Row(Isset(r, 50f, CtrlTiny), 8f);
+				if (Widgets.ButtonText(val4.Take(74f), "换一段", true, true, true, (TextAnchor?)null))
+				{
+					ruleIdx = (ruleIdx + 1) % array.Length;
+				}
+				Draw.EllipsisLabel(val4.Rest, "换字 → 断口宽随之变化", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "11",
+			Name = "Watermark 水印",
+			Api = "Shapes.Watermark(Rect, string mark, float alpha)",
+			Desc = "低透明度底纹徽记（空页面 / 封面页气质件）。绘制在内容之下，随主题令牌变色。",
+			Note = "预览 alpha .06~.10 · 内容浮于水印之上",
+			BodyH = 52f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0008: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0019: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0020: Unknown result type (might be due to invalid IL or missing references)
+				Shapes.InsetPanel(r);
+				Shapes.Watermark(r, "PC", 0.1f);
+				Draw.EllipsisLabel(r, "内容浮于水印之上", (GameFont)0, Tokens.Muted, (TextAnchor)4);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "12",
+			Name = "InsetPanel 凹陷面板",
+			Api = "Shapes.InsetPanel(Rect)",
+			Desc = "上暗下亮双描边拟物内嵌（输入区 / 列表容器常用），与 Panel（凸起）形成层级对偶。",
+			Note = "描边方向即层级语义：凹陷 = 可输入，凸起 = 可点击 · 点框体切换（交互回补）",
+			BodyH = 52f + CtrlTiny + 4f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0016: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0034: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0039: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00cb: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0061: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0062: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0087: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00bc: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00da: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00fe: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0118: Unknown result type (might be due to invalid IL or missing references)
+				VStack val = Layout.Column(r, 4f);
+				float lineTiny = LineTiny;
+				Rect rest = val.Rest;
+				Rect val2 = val.Take(Mathf.Max(lineTiny, rest.height - CtrlTiny - 4f));
+				if (Widgets.ButtonInvisible(val2, true))
+				{
+					insetRaised = !insetRaised;
+				}
+				if (insetRaised)
+				{
+					Draw.Box(val2, Tokens.PanelRaised);
+					Draw.Border(new Rect(val2.x, val2.y, val2.width, 1f), Tokens.Card);
+					Draw.Border(new Rect(val2.x, val2.yMax - 1f, val2.width, 1f), Tokens.Border);
+				}
+				else
+				{
+					Shapes.InsetPanel(val2);
+				}
+				HoverFrame(val2);
+				Draw.EllipsisLabel(val2, insetRaised ? "凸起 = 可点击" : "凹陷 = 可输入", (GameFont)0, Tokens.Text, (TextAnchor)4);
+				Draw.EllipsisLabel(val.Rest, insetRaised ? "当前：凸起" : "当前：凹陷", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		families.Add(family);
+	}
+
+	private static Rect Isset(Rect r, float dy, float h)
+	{
+		//IL_0026: Unknown result type (might be due to invalid IL or missing references)
+		return new Rect(r.x, r.y + dy, r.width, Mathf.Min(h, r.height - dy));
+	}
+
+	private static string Pick(params string[] a)
+	{
+		return a[Random.Range(0, a.Length)];
+	}
+
+	private void BuildTable()
+	{
+		Family family = new Family
+		{
+			Title = "A0+ · 表格原子族",
+			Sub = "5 件 · TableAtoms / TableFmt（Numbers / Work Tab 实证）"
+		};
+		family.Add(new Atom
+		{
+			No = "24",
+			Name = "SortHeaderCell 排序表头单元",
+			Api = "TableAtoms.HeaderCell(Rect, string, SortState) → bool · TableFmt.NextSort",
+			Interactive = true,
+			Badge = "ok",
+			Desc = "点表头循环排序（无 → 升 → 降 → 无），三角指示。返回 true 表示该次点击命中——这是真排序，下面这张表会跟着重排。",
+			Note = "列宽 34% / 22% / 22% / 22%（对齐预览 .ttab 四列）· 数据每 6 秒刷新一次且保持当前排序",
+			BodyH = 152f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0057: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0093: Expected I4, but got Unknown
+				//IL_01d9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01e3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01e8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0201: Unknown result type (might be due to invalid IL or missing references)
+				//IL_020b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0210: Unknown result type (might be due to invalid IL or missing references)
+				//IL_021f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_022d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0246: Unknown result type (might be due to invalid IL or missing references)
+				//IL_026c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0293: Unknown result type (might be due to invalid IL or missing references)
+				//IL_02c8: Unknown result type (might be due to invalid IL or missing references)
+				float[] array3 = new float[4] { 0.34f, 0.22f, 0.22f, 0.22f };
+				HStack val13 = Layout.Row(new Rect(r.x, r.y, r.width, 20f), 0f);
+				for (int n = 0; n < TableColumns.Length; n++)
+				{
+					Rect val14 = val13.Take(r.width * array3[n]);
+					if (TableAtoms.HeaderCell(val14, TableColumns[n], sortStates[n]))
+					{
+						sortStates[n] = (SortState)(int)TableFmt.NextSort(sortStates[n]);
+					}
+				}
+				int num3 = -1;
+				int dir = 0;
+				for (int num4 = 0; num4 < sortStates.Length; num4++)
+				{
+					if (sortStates[num4] != SortState.None)
+					{
+						num3 = num4;
+						dir = (((int)sortStates[num4] == 1) ? 1 : (-1));
+					}
+				}
+				int[] array4 = new int[6] { 0, 1, 2, 3, 4, 5 };
+				if (num3 > 0)
+				{
+					float[] key = num3 switch
+					{
+						2 => Array.ConvertAll(cellWork, (Converter<int, float>)((int v) => v)), 
+						1 => cellMood, 
+						_ => Array.ConvertAll(cellKill, (Converter<int, float>)((int v) => v)), 
+					};
+					Array.Sort(array4, (int a, int b) => key[a].CompareTo(key[b]) * dir);
+				}
+				VStack val15 = Layout.Column(new Rect(r.x, r.y + 22f, r.width, r.height - 22f), 0f);
+				foreach (int num6 in array4)
+				{
+					HStack val16 = Layout.Row(val15.Take(21f), 0f);
+					Draw.EllipsisLabel(val16.Take(r.width * array3[0]), Names[num6], (GameFont)0, Tokens.Text, (TextAnchor)3);
+					TableAtoms.ValueCell(val16.Take(r.width * array3[1]), cellMood[num6], 100f);
+					TableAtoms.ValueCell(val16.Take(r.width * array3[2]), (float)cellWork[num6], 45000f);
+					TableAtoms.ValueCell(val16.Take(r.width * array3[3]), (float)cellKill[num6], 20f);
+					Draw.LineH(r.x, val15.Y - 1f, r.width, Tokens.BorderHair);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "25",
+			Name = "ValueCell 阈值着色单元",
+			Api = "TableAtoms.ValueCell(Rect, float value, float reference)",
+			Desc = "数值按阈值映射底色（红 → 黄 → 绿三段），表格秒读异常行——Numbers 的核心可读性技巧。",
+			Note = "值 / 参照值 → 三段映射：低 = red，中 = warn，高 = alive",
+			BodyH = 24f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0013: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0019: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0032: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0040: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0045: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005c: Unknown result type (might be due to invalid IL or missing references)
+				float[] array2 = new float[6] { 3f, 9f, 17f, 12f, 5f, 19f };
+				HStack val11 = Layout.Row(r, 4f);
+				for (int m = 0; m < array2.Length; m++)
+				{
+					Rect rest3 = val11.Rest;
+					Rect val12 = val11.Take(Mathf.Min(58f, rest3.width));
+					if (val12.width < 20f)
+					{
+						break;
+					}
+					TableAtoms.ValueCell(val12, array2[m], 20f);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "26",
+			Name = "ColumnResize 列宽手柄",
+			Api = "TableAtoms.ResizeHandle(Rect area, float x) → bool · TableFmt.ResizeWidth",
+			Interactive = true,
+			Desc = "列间竖向手柄，按住横向拖动调列宽（宽度存列配置）。MouseDrag 事件 + clamp。",
+			Note = "按住竖手柄横向拖 · 预览 .colres{width:8px}（基准表 §1.4）",
+			BodyH = 40f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0022: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0023: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0076: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00de: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ea: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0107: Unknown result type (might be due to invalid IL or missing references)
+				//IL_010d: Invalid comparison between Unknown and I4
+				//IL_0124: Unknown result type (might be due to invalid IL or missing references)
+				Rect val10 = default(Rect);
+				val10 = new Rect(r.x, r.y, r.width, 34f);
+				Draw.Box(val10, Tokens.Card);
+				Draw.Border(val10, Tokens.BorderSoft);
+				int num2 = Mathf.RoundToInt(val10.width * resizeX);
+				Draw.EllipsisLabel(new Rect(val10.x + 8f, val10.y, (float)num2, val10.height), "名字列", (GameFont)0, Tokens.Text, (TextAnchor)3);
+				Draw.EllipsisLabel(new Rect(val10.x + (float)num2 + 12f, val10.y, val10.width - (float)num2 - 14f, val10.height), "数值列 " + Mathf.RoundToInt(resizeX * 100f) + "%", (GameFont)0, Tokens.Muted, (TextAnchor)3);
+				if (TableAtoms.ResizeHandle(val10, resizeX) && Event.current != null && (int)Event.current.type == 3)
+				{
+					resizeX = Mathf.Clamp(TableFmt.ResizeWidth(resizeX + Event.current.delta.x / Mathf.Max(1f, val10.width), 0.15f, 0.85f, 0f), 0.15f, 0.85f);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "27",
+			Name = "FrozenColumn 冻结首列",
+			Api = "TableAtoms.FrozenSplit(Rect, float frozenWidth, out Rect frozen, out Rect scrollArea)",
+			Desc = "横向滚动时首列（姓名 / 图标）钉住不动：裁剪双区同 y 对齐绘制，滚动偏移只作用于右区。",
+			Note = "预览 .frozen{64px} · .fc{border-right:2px solid border} · 右区可横向滚动（交互回补）",
+			BodyH = 68f + CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0029: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_013d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_013e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0149: Unknown result type (might be due to invalid IL or missing references)
+				//IL_014a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00dc: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00de: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0108: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0191: Unknown result type (might be due to invalid IL or missing references)
+				//IL_019f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01c1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01c6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01cf: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01d9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01de: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01e2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01f7: Unknown result type (might be due to invalid IL or missing references)
+				VStack val4 = Layout.Column(r, 4f);
+				Rect val5 = default(Rect);
+				Rect val6 = default(Rect);
+				TableAtoms.FrozenSplit(val4.Take(64f), 118f, out val5, out val6);
+				Draw.Box(val6, Tokens.Panel);
+				string[] array = new string[8] { "心情", "工时", "击杀", "建造", "采矿", "手工", "种植", "驯兽" };
+				for (int j = 0; j < 3; j++)
+				{
+					HStack val7 = Layout.Row(new Rect(val6.x + 4f - frozenScroll, val6.y + 4f + (float)j * 20f, 560f, 18f), 14f);
+					for (int k = 0; k < array.Length; k++)
+					{
+						Rect val8 = val7.Take(58f);
+						Draw.EllipsisLabel(val8, array[k] + " " + (int)(cellMood[j] + (float)(k * 3)), (GameFont)0, Tokens.Muted, (TextAnchor)3);
+					}
+				}
+				Draw.Box(val5, Tokens.PanelRaised);
+				Draw.Border(val5, Tokens.BorderSoft);
+				for (int l = 0; l < 3; l++)
+				{
+					Draw.EllipsisLabel(new Rect(val5.x + 6f, val5.y + 4f + (float)l * 20f, val5.width - 12f, 18f), Names[l], (GameFont)0, Tokens.Text, (TextAnchor)3);
+				}
+				Rect rest2 = val4.Rest;
+				HStack val9 = Layout.Row(val4.Take(rest2.height), 8f);
+				Widgets.HorizontalSlider(val9.Rest, ref frozenScroll, new FloatRange(0f, 140f), (string)null, -1f);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "28",
+			Name = "DensitySwitch 密度三档",
+			Api = "TableAtoms.DensitySwitch(Rect, ref RowDensity) → bool · TableFmt.RowHeight",
+			Interactive = true,
+			Desc = "紧凑 / 标准 / 舒适三档行高全局切换（22 / 28 / 34f），大表格按屏幅自选——Work Tab 缩放实证。",
+			Note = "返回 true 表示档位被切换；行高由 TableFmt.RowHeight 派生，不写死数字",
+			BodyH = 124f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0047: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0059: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0063: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0079: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0087: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0095: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d9: Unknown result type (might be due to invalid IL or missing references)
+				VStack val = Layout.Column(r, 6f);
+				if (TableAtoms.DensitySwitch(val.Take(26f), ref density))
+				{
+				}
+				float num = TableFmt.RowHeight(density);
+				VStack val2 = Layout.Column(val.Take(90f), 0f);
+				for (int i = 0; i < 6; i++)
+				{
+					Rect rest = val2.Rest;
+					if (!(rest.height > num * 0.5f))
+					{
+						break;
+					}
+					HStack val3 = Layout.Row(val2.Take(num), 0f);
+					Draw.EllipsisLabel(val3.Take(r.width * 0.6f), WorkTypes[i], (GameFont)0, Tokens.Text, (TextAnchor)3);
+					Draw.EllipsisLabel(val3.Rest, i + 1 + " 号位", (GameFont)0, Tokens.Dim, (TextAnchor)5);
+					Draw.LineH(r.x, val2.Y - 1f, r.width, Tokens.BorderHair);
+				}
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildPanel()
+	{
+		Family family = new Family
+		{
+			Title = "A0+ · 面板原子族",
+			Sub = "4 件 · PanelAtoms（RimHUD 实证）"
+		};
+		family.Add(new Atom
+		{
+			No = "29",
+			Name = "StatRow 图标统计行",
+			Api = "PanelAtoms.StatRow(Rect, string label, string value, float? bar01, Color? barColor)",
+			Desc = "HUD 面板的行原子：图标 + 标签 + 数值（可带微型条）。RimHUD 每个信息块都是它的排列组合。",
+			Note = "数值随时钟真实衰减 / 回补，低值转 warn，归零转 dead",
+			BodyH = 62f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00bb: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0112: Unknown result type (might be due to invalid IL or missing references)
+				VStack val6 = Layout.Column(r, 1f);
+				float num = Mathf.Repeat(t * 0.06f, 1f);
+				PanelAtoms.StatRow(val6.Take(20f), "心情", Mathf.RoundToInt(62f + 8f * Mathf.Sin(t * 0.7f)) + "%", (float?)(0.62f + 0.08f * Mathf.Sin(t * 0.7f)), (Color?)Tokens.Accent);
+				PanelAtoms.StatRow(val6.Take(20f), "健康", "96%", (float?)0.96f, (Color?)Tokens.Alive);
+				PanelAtoms.StatRow(val6.Take(20f), "疲劳", Mathf.RoundToInt(40f + num * 50f) + "%", (float?)(0.4f + num * 0.5f), (Color?)Tokens.Warn);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "30",
+			Name = "MiniProfileChip 迷你档案条",
+			Api = "PanelAtoms.MiniProfileChip(Rect, string initial, string name, float mood01, float health01)",
+			Desc = "单行高密档案：微头像 + 名 + 双 micro 条（心情 / 健康）——事件流与队列行内嵌 pawn 信息。",
+			Note = "两条 micro 条分别走心情 / 健康色阶；数据随帧漂移",
+			BodyH = 76f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0054: Unknown result type (might be due to invalid IL or missing references)
+				VStack val5 = Layout.Column(r, 4f);
+				PanelAtoms.MiniProfileChip(val5.Take(36f), "蓝", Names[0], 0.72f + 0.04f * Mathf.Sin(t * 0.9f), 0.94f);
+				PanelAtoms.MiniProfileChip(val5.Take(36f), "赤", Names[1], 0.38f + 0.05f * Mathf.Sin(t * 1.3f), 0.81f);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "31",
+			Name = "FlashOverlay 警示闪边",
+			Api = "PanelAtoms.FlashOverlay(Rect, float t, Color?, float thickness)",
+			Desc = "致命病症 / 临近崩溃时整块边框脉动（accent ↔ dead 插值 + sin 呼吸），比静态红框更难被忽视。",
+			Note = "预览 km-blink{box-shadow 扩散} ⇒ 引擎侧降级为边框色相位脉动（基准表 §1.5）",
+			BodyH = CtrlTiny + 5f + 44f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0051: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0056: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0063: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0099: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00cb: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00db: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_011e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_014c: Unknown result type (might be due to invalid IL or missing references)
+				string[] array4 = new string[4] { "正常", "低", "中", "高" };
+				VStack val3 = Layout.Column(r, 5f);
+				InputAtoms.Segmented(val3.Take(CtrlTiny), array4, ref alertLv);
+				Rect rest = val3.Rest;
+				Rect val4 = val3.Take(rest.height);
+				if (!(val4.height < LineTiny))
+				{
+					Draw.Box(val4, Tokens.Card);
+					if (alertLv == 0)
+					{
+						Draw.Border(val4, Tokens.BorderSoft);
+						Draw.Box(new Rect(val4.x, val4.y + 1f, 3f, val4.height - 2f), Tokens.Alive);
+						Draw.EllipsisLabel(val4, "\u3000正常 · 无告警", (GameFont)0, Tokens.Muted, (TextAnchor)3);
+					}
+					else
+					{
+						PanelAtoms.FlashOverlay(val4, flash, (Color?)Tokens.Dead, (alertLv >= 3) ? 2f : 1f);
+						Draw.EllipsisLabel(val4, "\u3000崩溃风险（" + array4[alertLv] + "）· 心情 " + (38 - alertLv * 10), (GameFont)0, Tokens.Dead, (TextAnchor)3);
+					}
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "32",
+			Name = "SectionBar 面板分段条",
+			Api = "PanelAtoms.SectionBar(Rect, string title, string count, bool expanded)",
+			Desc = "HUD 面板的薄分段头（可折叠）：高 20f，标题居左 + 计数 + 折叠箭头，比 SectionTitle 更密。",
+			Note = "计数取官方警报 / 想法 / 历史记录器词表 · 点条折叠（交互回补）",
+			BodyH = 118f,
+			Paint = delegate(Rect r)
+			{
+				//IL_005e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0064: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0069: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0081: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00db: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e5: Unknown result type (might be due to invalid IL or missing references)
+				string[] array = new string[3] { "警报", "想法", "历史记录器" };
+				string[] array2 = new string[3] { "11 项", "15 项", "11 项" };
+				string[] array3 = new string[3] { "食物不足 / 药品不足 / 崩溃风险（高）/ 衣衫褴褛 …", "很高的期望 / 合理的期望 / 大麻亢奋 / 宿醉（轻微）…", "殖民者心情 / 财富（物品）/ 威胁点数 / 人口适应 …" };
+				VStack val = Layout.Column(r, 3f);
+				for (int i = 0; i < array.Length; i++)
+				{
+					Rect val2 = val.Take(19f);
+					PanelAtoms.SectionBar(val2, array[i], array2[i], secOpen[i]);
+					HoverFrame(val2);
+					if (Widgets.ButtonInvisible(val2, true))
+					{
+						secOpen[i] = !secOpen[i];
+					}
+					if (secOpen[i])
+					{
+						Draw.EllipsisLabel(val.Take(LineTiny), array3[i], (GameFont)0, Tokens.Dim, (TextAnchor)3);
+					}
+				}
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildInteract()
+	{
+		Family family = new Family
+		{
+			Title = "A0+ · 交互原子族",
+			Sub = "4 件 · InteractAtoms（Mod Manager / DragList 实证）"
+		};
+		family.Add(new Atom
+		{
+			No = "33",
+			Name = "GripHandle 拖拽把手",
+			Api = "InteractAtoms.GripHandle(Rect, int rows, int cols, Color?) → bool",
+			Interactive = true,
+			Desc = "行首把手（可拖行视觉提示 + 悬停变 accent），拖拽重排的专用命中区——与行点击分离，防误拖。",
+			Note = "点把手切换高亮态；点行体不触发（命中区分离是防误拖的关键）",
+			BodyH = 176f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0026: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0038: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0039: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0053: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0087: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ac: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e0: Unknown result type (might be due to invalid IL or missing references)
+				VStack val9 = Layout.Column(r, 3f);
+				for (int l = 0; l < 8; l++)
+				{
+					HStack val10 = Layout.Row(val9.Take(19f), 6f);
+					Rect val11 = val10.Take(16f);
+					if (InteractAtoms.GripHandle(val11, 3, 2, (gripOn && l == 0) ? new Color?(Tokens.Accent) : null) && l == 0)
+					{
+						gripOn = !gripOn;
+					}
+					Draw.EllipsisLabel(val10.Take(20f), (l + 1).ToString("00"), (GameFont)0, Tokens.Dim, (TextAnchor)3);
+					Draw.EllipsisLabel(val10.Rest, WorkTypes[l], (GameFont)0, Tokens.Text, (TextAnchor)3);
+					Draw.LineH(r.x, val9.Y - 1f, r.width, Tokens.BorderHair);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "34",
+			Name = "EyeToggle 可见性切换",
+			Api = "InteractAtoms.EyeToggle(Rect, bool visible, Color?) → bool",
+			Interactive = true,
+			Desc = "切换行 / 列可见性（隐藏态半透明 + 斜杠），列配置、图层显隐、面板模块开关通用。",
+			Note = "返回新状态由调用方回写（组件自身零状态）· 预览 .iconbtn{28×28}",
+			BodyH = 132f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0038: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0043: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0053: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0062: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0085: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00df: Unknown result type (might be due to invalid IL or missing references)
+				string[] array3 = new string[6] { "角色", "健康", "需求", "装备", "社交", "日志" };
+				VStack val6 = Layout.Column(r, 3f);
+				for (int k = 0; k < array3.Length; k++)
+				{
+					HStack val7 = Layout.Row(val6.Take(19f), 7f);
+					Rect val8 = val7.Take(24f);
+					bool flag2 = eyeRows[k];
+					if (InteractAtoms.EyeToggle(val8, flag2, (Color?)null))
+					{
+						eyeRows[k] = !eyeRows[k];
+					}
+					Draw.EllipsisLabel(val7.Rest, array3[k] + " 页签" + (flag2 ? "" : "（已隐藏）"), (GameFont)0, flag2 ? Tokens.Text : Tokens.Dim, (TextAnchor)3);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "35",
+			Name = "SearchHighlight 搜索命中高亮",
+			Api = "InteractAtoms.SearchHighlight(Rect, string text, string query, GameFont, Color?)",
+			Desc = "搜索关键词在结果行内分段高亮（命中段 accent 底）。分段测量绘制，CJK 安全。",
+			Note = "⚠ 契约：关键词为空时整行普通绘制 · 真输入框（交互回补）",
+			BodyH = CtrlTiny + 2f + 6f * LineTiny + 10f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0038: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0043: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0050: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0054: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0069: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00da: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00df: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ec: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00fb: Unknown result type (might be due to invalid IL or missing references)
+				string[] array2 = new string[6] { "建造 12 · 建造师 · 部落工匠", "采矿 9 · 矿工 · 在井下待了半辈子", "手工 7 · 铁匠 · 敲钢铁的手很稳", "射击 5 · 猎手 · 只用反曲弓", "种植 4 · 农夫 · 会看云识天气", "医疗 1 · 医者 · 抄过三本旧医书" };
+				HStack val3 = Layout.Row(r, 6f);
+				Rect val4 = val3.Take(58f);
+				shQuery = Widgets.TextField(val3.Rest, shQuery);
+				if (Widgets.ButtonText(val4, "清空", true, true, true, (TextAnchor?)null))
+				{
+					shQuery = "";
+				}
+				VStack val5 = Layout.Column(new Rect(r.x, r.y + CtrlTiny + 2f, r.width, Mathf.Max(0f, r.height - CtrlTiny - 2f)), 2f);
+				for (int j = 0; j < array2.Length; j++)
+				{
+					InteractAtoms.SearchHighlight(val5.Take(LineTiny), array2[j], shQuery, Tokens.FontBody, (Color?)null);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "36",
+			Name = "ToolbarIconButton 图标工具钮",
+			Api = "InteractAtoms.ToolbarIcon(Rect, string glyph, bool active) → bool",
+			Interactive = true,
+			Desc = "方形单图标钮（激活态 accent 底 + 2px 内描边），悬停 Tooltip、长按可弹出备选。",
+			Note = "按钮本体即 28×28（预览 .iconbtn）· 首钮可切换激活态",
+			BodyH = 30f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0048: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0075: Unknown result type (might be due to invalid IL or missing references)
+				HStack val = Layout.Row(r, 5f);
+				string[] array = new string[5] { "E", "M", "D", "L", "Z" };
+				for (int i = 0; i < array.Length; i++)
+				{
+					Rect val2 = val.Take(28f);
+					if (val2.width < 20f)
+					{
+						break;
+					}
+					bool flag = iconOn && i == 0;
+					if (InteractAtoms.ToolbarIcon(val2, array[i], flag) && i == 0)
+					{
+						iconOn = !iconOn;
+					}
+				}
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildProgress()
+	{
+		Family family = new Family
+		{
+			Title = "A0+ · 进度与容量",
+			Sub = "3 件 · ProgressAtoms"
+		};
+		family.Add(new Atom
+		{
+			No = "37",
+			Name = "FillWipe 斜向进度擦除",
+			Api = "ProgressAtoms.FillWipe(Rect, float progress01, Color?, int rows, float slant)",
+			Desc = "节点 / 卡片上的斜向填充推进（分段行绘制），比水平条更有「施工中」叙事感。",
+			Note = "⚠ 契约：组件自铺 BorderSoft 满底 + 分段实心条 —— 调用方不得再叠底、不得与 label 叠压 · 可跳过本项",
+			BodyH = 52f + CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0019: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0034: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0040: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0071: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0076: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0104: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0143: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0153: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0158: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0161: Unknown result type (might be due to invalid IL or missing references)
+				//IL_016b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0170: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0178: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01b2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01bd: Unknown result type (might be due to invalid IL or missing references)
+				VStack val6 = Layout.Column(r, 4f);
+				Rect val7 = val6.Take(48f);
+				val7.width = Mathf.Min(300f, val7.width);
+				Draw.Box(val7, Tokens.Card);
+				Draw.Border(val7, Tokens.BorderSoft);
+				Draw.Box(new Rect(val7.x, val7.y + 1f, 3f, val7.height - 2f), Tokens.Accent);
+				ProgressAtoms.FillWipe(new Rect(val7.x + 4f, val7.y + 1f, val7.width - 5f, val7.height - 2f), Mathf.Clamp01(wipe), (Color?)Tokens.Accent, 10, 0.35f);
+				Draw.EllipsisLabel(new Rect(val7.x + 11f, val7.y, val7.width - 22f, val7.height), Research[researchIdx] + " · 研究点 " + Mathf.RoundToInt(Mathf.Clamp01(wipe) * 100f) + "%", (GameFont)0, Tokens.Text, (TextAnchor)3);
+				Rect rest2 = val6.Rest;
+				HStack val8 = Layout.Row(val6.Take(rest2.height), 6f);
+				if (Widgets.ButtonText(val8.Take(82f), "跳过本项", true, true, true, (TextAnchor?)null))
+				{
+					researchIdx = (researchIdx + 1) % Research.Length;
+				}
+				Draw.EllipsisLabel(val8.Rest, "研究队列 · 官方 ResearchProjectDef", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "38",
+			Name = "CapacityBar 容量叠印条",
+			Api = "ProgressAtoms.CapacityBar(Rect, float used, float capacity, Color?)",
+			Desc = "容量占用叠印（搬运 / 仓储 / 背包）：接近满载变黄，超载时右端出现红色溢出竖块。",
+			Note = "⚠ 契约：默认色 = ratio>0.85 ? Warn : Alive（非 Accent）；超载溢出 = 4 个红竖块（非虚线）⇒ 传 null 让组件自表达",
+			BodyH = 66f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0032: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0038: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0057: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0065: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0083: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0092: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0097: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0099: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e0: Unknown result type (might be due to invalid IL or missing references)
+				string[] array = new string[3] { "背包", "仓库", "冷藏柜" };
+				float[] array2 = new float[3] { 780f, 1000f, 1180f };
+				VStack val3 = Layout.Column(r, 4f);
+				for (int j = 0; j < array.Length; j++)
+				{
+					HStack val4 = Layout.Row(val3.Take(18f), 8f);
+					Draw.EllipsisLabel(val4.Take(44f), array[j], (GameFont)0, Tokens.Muted, (TextAnchor)3);
+					Rect rest = val4.Rest;
+					Rect val5 = val4.Take(rest.width - 46f);
+					ProgressAtoms.CapacityBar(val5, array2[j], 1000f, (Color?)null);
+					Draw.EllipsisLabel(val4.Rest, Mathf.RoundToInt(array2[j] / 10f) + "%", (GameFont)0, (j == 2) ? Tokens.Dead : Tokens.Muted, (TextAnchor)5);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "39",
+			Name = "ZoomIndicator 缩放指示",
+			Api = "ProgressAtoms.ZoomIndicator(Rect, float zoom, float resetValue) → bool",
+			Interactive = true,
+			Desc = "图谱 / 画布角落的缩放读数 + 一键复位；平移缩放工作区的标配伴侣。",
+			Note = "⚠ 契约：组件内部自带 Layout.Row 排 [标签34][读数50][按钮64] ⇒ 调用方只需给 ≥174 宽",
+			BodyH = 100f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0025: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ac: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ad: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_012b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_013b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0145: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0150: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0134: Unknown result type (might be due to invalid IL or missing references)
+				//IL_015c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0155: Unknown result type (might be due to invalid IL or missing references)
+				if (ProgressAtoms.ZoomIndicator(new Rect(r.x, r.y, Mathf.Min(200f, r.width), 26f), zoom, 0.86f))
+				{
+					zoom = 0.86f;
+				}
+				zoom = Mathf.Clamp(0.86f + 0.34f * Mathf.Sin(t * 0.6f), 0.2f, 3f);
+				Rect val = default(Rect);
+				val = new Rect(r.x, r.y + 30f, Mathf.Min(268f, r.width), 66f);
+				Draw.Box(val, Tokens.Window);
+				Draw.Border(val, Tokens.BorderSoft);
+				for (int i = 0; i < 8; i++)
+				{
+					int num = i % 4;
+					int num2 = i / 4;
+					Rect val2 = Atoms.Anchor(val, (Anchor9)((num2 != 0) ? 6 : 0), new Vector2(52f, 22f), 6f);
+					val2 = new Rect(val2.x + (float)num * 58f, val2.y + (float)num2 * 26f, 52f, 22f);
+					Draw.Box(val2, Draw.WithAlpha((i == 0 || i == 5) ? Tokens.Accent : Tokens.PanelRaised, 0.5f));
+					Draw.Border(val2, (i == 0) ? Tokens.Accent : Tokens.BorderSoft);
+				}
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildMisc()
+	{
+		Family family = new Family
+		{
+			Title = "A0+ · 杂项原子",
+			Sub = "3 件 · MiscAtoms"
+		};
+		family.Add(new Atom
+		{
+			No = "40",
+			Name = "PointCostBadge 点数徽章",
+			Api = "MiscAtoms.PointCostBadge(Rect, int budget, int spent)",
+			Desc = "预算点数徽章（剩余 / 用尽 / 超支三态自动换色），角色编辑器式配额展示；预算管理类界面通用。",
+			Note = "⚠ 契约：参数序是 (budget, spent)；宽高即徽章本体 ⇒ 按 .pill 取「文本宽 + 18」",
+			BodyH = 68f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0023: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0030: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0049: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0056: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0105: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0122: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0127: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0129: Unknown result type (might be due to invalid IL or missing references)
+				//IL_014e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_017c: Unknown result type (might be due to invalid IL or missing references)
+				VStack val6 = Layout.Column(r, 6f);
+				HStack val7 = Layout.Row(val6.Take(24f), 6f);
+				float num4 = Mathf.Min(r.width, Text.CalcSize("剩余 128 点").x + 18f);
+				Rect val8 = val7.Take(num4);
+				if (Widgets.ButtonText(val7.Take(26f), "−", true, true, budgetSpent > 0, (TextAnchor?)null))
+				{
+					budgetSpent = Mathf.Max(0, budgetSpent - 16);
+				}
+				if (Widgets.ButtonText(val7.Take(26f), "+", true, true, budgetSpent < 240, (TextAnchor?)null))
+				{
+					budgetSpent = Mathf.Min(240, budgetSpent + 16);
+				}
+				MiscAtoms.PointCostBadge(new Rect(val8.x, val8.y, Mathf.Min(num4, val8.width), val8.height), 200, budgetSpent);
+				Rect val9 = val6.Take(11f);
+				ProgressAtoms.CapacityBar(val9, (float)budgetSpent, 200f, (Color?)null);
+				Draw.EllipsisLabel(val6.Take(LineTiny), "预算 " + 200 + " · 已分配 " + budgetSpent, (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "41",
+			Name = "BubbleTag 窗口层气泡标签",
+			Api = "MiscAtoms.BubbleTag(Rect bubble, string text, Color? color)",
+			Desc = "带下尾巴的悬浮小气泡（需求 / 想法快显）。气泡文案取官方 ThoughtDef：宿醉、很高的期望、大麻亢奋……",
+			Note = "⚠ 契约：rect 仅为主体，尾巴画在 yMax 下方 8px ⇒ 高度只给一行（22）",
+			BodyH = 60f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0054: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0071: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0076: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ec: Unknown result type (might be due to invalid IL or missing references)
+				string[] array = new string[4] { "宿醉（轻微）", "很高的期望", "大麻亢奋", "仙馐果暖身" };
+				VStack val4 = Layout.Column(r, 26f);
+				string text = array[Mathf.FloorToInt(t * 0.3f) % array.Length];
+				float num3 = Mathf.Min(r.width, Text.CalcSize(text).x + 18f);
+				Rect val5 = val4.Take(22f);
+				MiscAtoms.BubbleTag(new Rect(val5.x, val5.y, Mathf.Min(num3, val5.width), val5.height), text, (Color?)Tokens.Card);
+				MiscAtoms.BubbleTag(new Rect(val5.x + num3 + 12f, val5.y, Mathf.Min(num3, Mathf.Max(0f, val5.width - num3 - 12f)), val5.height), "合理的期望", (Color?)null);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "42",
+			Name = "ThinScrollBar 细滚动条",
+			Api = "MiscAtoms.ThinScrollBar(Rect viewRect, float contentH, float scrollY, float width)",
+			Desc = "自绘细滚动条（细轨 + 圆角滑块），替代原版宽灰条——深色主题下违和感根除。",
+			Note = "⚠ 契约：条画在 viewRect.xMax + 1f（rect 外侧）；contentH ≤ height 时完全不画 ⇒ 传视口 rect",
+			BodyH = 76f,
+			Paint = delegate(Rect r)
+			{
+				//IL_004a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0056: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0057: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0089: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0106: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0141: Unknown result type (might be due to invalid IL or missing references)
+				//IL_014b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0150: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ae: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ba: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c0: Invalid comparison between Unknown and I4
+				//IL_01c8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01cd: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0180: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01a9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01e9: Unknown result type (might be due to invalid IL or missing references)
+				Rect val = default(Rect);
+				val = new Rect(r.x, r.y, Mathf.Max(40f, r.width - 12f), 76f);
+				float num = Mathf.Max(1f, 220f - val.height);
+				Draw.Box(val, Tokens.Panel);
+				Draw.Border(val, Tokens.BorderSoft);
+				Rect val2 = default(Rect);
+				val2 = new Rect(val.xMax + 1f, val.y, 8f, val.height);
+				if (Mouse.IsOver(val2) && Event.current.isMouse && Event.current.button == 0 && ((int)Event.current.type == 0 || (int)Event.current.type == 3))
+				{
+					thinScroll = Mathf.Clamp01((Event.current.mousePosition.y - val.y) / Mathf.Max(1f, val.height)) * num;
+				}
+				HoverFrame(val2);
+				VStack val3 = Layout.Column(new Rect(val.x + 4f, val.y + 3f, val.width - 8f, val.height - 6f), 2f);
+				int num2 = Mathf.Clamp(Mathf.FloorToInt(thinScroll / LineTiny), 0, EventWords.Length - 1);
+				for (int i = num2; i < EventWords.Length; i++)
+				{
+					Rect rest = val3.Rest;
+					if (!(rest.height >= LineTiny))
+					{
+						break;
+					}
+					Draw.EllipsisLabel(val3.Take(LineTiny), EventWords[i] + "\u3000" + (120 + i * 37), (GameFont)0, Tokens.Muted, (TextAnchor)3);
+				}
+				MiscAtoms.ThinScrollBar(val, 220f, thinScroll, 8f);
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildStatus()
+	{
+		Family family = new Family
+		{
+			Title = "A0 · 原子层 —— 状态原子",
+			Sub = "5 件 · StatusAtoms（alpha/scale 插值，无 CSS 过渡）"
+		};
+		family.Add(new Atom
+		{
+			No = "13",
+			Name = "PulseDot 呼吸状态点",
+			Api = "StatusAtoms.PulseDot(Rect, Color, float t, float minAlpha)",
+			Desc = "绿在线 / 黄忙碌 / 红告急，alpha 与 scale 双插值脉动。任意锚点的存活指示。",
+			Note = "三个点共用同一条动画但错相位——同相位会像灯泡，错相位才像呼吸",
+			BodyH = 24f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0034: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0039: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0040: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0045: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0051: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0070: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0075: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0094: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0099: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ca: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d3: Unknown result type (might be due to invalid IL or missing references)
+				HStack val19 = Layout.Row(r, 20f);
+				string[] array4 = new string[3] { "在线", "忙碌", "告急" };
+				Color[] array5 = (Color[])(object)new Color[3]
+				{
+					Tokens.Alive,
+					Tokens.Warn,
+					Tokens.Dead
+				};
+				for (int l = 0; l < array4.Length; l++)
+				{
+					Rect val20 = val19.Take(17f + Measure.Width(array4[l], (GameFont)0));
+					if (val20.width < 10f)
+					{
+						break;
+					}
+					HStack val21 = Layout.Row(val20, 7f);
+					StatusAtoms.PulseDot(val21.Take(10f), array5[l], t + (float)l * 0.55f, 0.45f);
+					Draw.EllipsisLabel(val21.Rest, array4[l], (GameFont)0, Tokens.Muted, (TextAnchor)3);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "14",
+			Name = "StatusGlyph 状态图形",
+			Api = "StatusAtoms.Glyph(Rect, StatusKind)",
+			Desc = "五态语义图形（色随语义令牌），比图标字库更可控——自绘两笔线条。",
+			Note = "规格对齐预览 .glyph{17×17;font-size:12px}（基准表 §1.4）· 点图形切换读数",
+			BodyH = 44f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0048: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0067: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0131: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0150: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0087: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0093: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ac: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e5: Unknown result type (might be due to invalid IL or missing references)
+				StatusKind[] array2 = new StatusKind[5] { StatusKind.Ok, StatusKind.Info, StatusKind.Warn, StatusKind.Error, StatusKind.Paused };
+				string[] array3 = new string[5] { "正常", "信息", "警告", "失效", "暂停" };
+				HStack val16 = Layout.Row(r, 14f);
+				for (int k = 0; k < array2.Length; k++)
+				{
+					Rect val17 = val16.Take(23f + Measure.Width(array3[k], (GameFont)0));
+					if (val17.width < 17f)
+					{
+						break;
+					}
+					HStack val18 = Layout.Row(val17, 6f);
+					StatusAtoms.Glyph(val18.Take(17f), array2[k]);
+					Draw.EllipsisLabel(val18.Rest, array3[k], (GameFont)0, Tokens.Dim, (TextAnchor)3);
+					HoverFrame(val17);
+					if (Widgets.ButtonInvisible(new Rect(val17.x, val17.y, val17.width, val17.height), true))
+					{
+						glyphIdx = k;
+					}
+				}
+				Draw.EllipsisLabel(new Rect(r.x, r.y + 20f, r.width, LineTiny), "当前读数：" + array3[Mathf.Clamp(glyphIdx, 0, 4)], (GameFont)0, Tokens.Accent, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "15",
+			Name = "LoadingSpinner 旋转加载",
+			Api = "StatusAtoms.Spinner(Rect, float t, Color?, int segments, float radius, float size)",
+			Desc = "自绘分段旋转。另有 DrawTextureRotated 贴图重载，走 GUIUtility.RotateAroundPivot 捷径。",
+			Note = "进度累积到 100% 自动停转并转 ✓ · 可重播（交互回补）",
+			BodyH = 41f + CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0019: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0050: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0051: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0066: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0031: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0086: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0093: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ac: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00cc: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00df: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e4: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ec: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0124: Unknown result type (might be due to invalid IL or missing references)
+				//IL_013e: Unknown result type (might be due to invalid IL or missing references)
+				HStack val12 = Layout.Row(r, 10f);
+				Rect val13 = val12.Take(22f);
+				if (!spinDone)
+				{
+					StatusAtoms.Spinner(val13, t, (Color?)Tokens.Accent, 8, 8f, 3f);
+				}
+				else
+				{
+					Draw.Box(val13, Draw.WithAlpha(Tokens.Alive, 0.16f));
+					Draw.Label(val13, "✓", (GameFont)1, Tokens.Alive, (TextAnchor)4);
+				}
+				VStack val14 = Layout.Column(val12.Rest, 4f);
+				KBar(val14.Take(11f), spinP / 100f, spinDone ? Tokens.Alive : Tokens.Accent);
+				Rect rest3 = val14.Rest;
+				HStack val15 = Layout.Row(val14.Take(rest3.height), 6f);
+				if (Widgets.ButtonText(val15.Take(64f), "重播", true, true, true, (TextAnchor?)null))
+				{
+					spinP = 0f;
+					spinDone = false;
+				}
+				Draw.EllipsisLabel(val15.Rest, spinDone ? "归档完成 · 事件日志已写入" : "正在归档 事件日志…", (GameFont)0, Tokens.Muted, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "16",
+			Name = "ScrollFadeHint 滚动渐隐提示",
+			Api = "StatusAtoms.ScrollFadeHint(Rect viewport, bool moreBelow)",
+			Interactive = true,
+			Desc = "视口底部渐隐 + ▾ 提示「下面还有」。渐隐遮罩需渐变贴图，▾ 与判定为纯原生。",
+			Note = "滚到底部自动消失（moreBelow=false 时不绘制）",
+			BodyH = 82f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0016: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0034: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0035: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0036: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0075: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0084: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0091: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0115: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0124: Unknown result type (might be due to invalid IL or missing references)
+				//IL_012e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0133: Unknown result type (might be due to invalid IL or missing references)
+				//IL_013b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0182: Unknown result type (might be due to invalid IL or missing references)
+				//IL_019c: Unknown result type (might be due to invalid IL or missing references)
+				HStack val8 = Layout.Row(r, 10f);
+				Rect rest2 = val8.Rest;
+				Rect val9 = val8.Take(Mathf.Min(210f, rest2.width - 90f));
+				Draw.Box(val9, Tokens.Panel);
+				VStack val10 = Layout.Column(new Rect(val9.x + 4f, val9.y + 3f, val9.width - 8f, val9.height - 6f), 2f);
+				for (int j = 0; j < 6; j++)
+				{
+					rest2 = val10.Rest;
+					if (!(rest2.height >= LineTiny))
+					{
+						break;
+					}
+					Draw.EllipsisLabel(val10.Take(LineTiny), "09:4" + j + " · " + Pick("袭击", "寒流", "虫灾", "贸易商队"), (GameFont)0, Tokens.Muted, (TextAnchor)3);
+				}
+				StatusAtoms.ScrollFadeHint(val9, moreBelow);
+				VStack val11 = Layout.Column(val8.Rest, 4f);
+				if (Widgets.ButtonText(val11.Take(CtrlTiny), moreBelow ? "切到已到底" : "切到还有内容", true, true, true, (TextAnchor?)null))
+				{
+					moreBelow = !moreBelow;
+				}
+				Draw.EllipsisLabel(val11.Take(LineTiny), moreBelow ? "moreBelow = true" : "moreBelow = false", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "17",
+			Name = "ExpandCaret 展开箭头",
+			Api = "StatusAtoms.Caret(Rect, bool expanded, Color?) / Caret(Rect, float progress01, Color?)",
+			Interactive = true,
+			Desc = "▸ / ▾ 旋转插值——CollapsibleTree / SectionFrame / 折叠组的共享原子。",
+			Note = "bool 重载（插值旋转）+ float 重载（0–1 进度）；工坊实证 20 项工作类型",
+			BodyH = 58f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0019: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0020: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0025: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0032: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00be: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_014a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_014f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00eb: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00fe: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0103: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0105: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0107: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0112: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0114: Unknown result type (might be due to invalid IL or missing references)
+				//IL_011f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_012a: Unknown result type (might be due to invalid IL or missing references)
+				VStack val = Layout.Column(r, 4f);
+				Rect val2 = val.Take(24f);
+				HStack val3 = Layout.Row(val2, 7f);
+				Rect val4 = val3.Take(16f);
+				StatusAtoms.Caret(val4, caretOpen, (Color?)null);
+				if (Widgets.ButtonInvisible(val2, true))
+				{
+					caretOpen = !caretOpen;
+				}
+				Draw.EllipsisLabel(val3.Rest, "工作优先级（" + WorkTypes.Length + " 项）", (GameFont)0, Tokens.Text, (TextAnchor)3);
+				Rect val5 = val.Take(30f);
+				if (caretOpen)
+				{
+					HStack val6 = Layout.Row(val5, 4f);
+					for (int i = 0; i < WorkTypes.Length; i++)
+					{
+						Rect rest = val6.Rest;
+						if (!(rest.width > 30f))
+						{
+							break;
+						}
+						float num = Text.CalcSize(WorkTypes[i]).x + 10f;
+						rest = val6.Rest;
+						Rect val7 = val6.Take(Mathf.Min(num, rest.width));
+						Draw.Box(val7, Tokens.Card);
+						Draw.Border(val7, Tokens.BorderSoft);
+						Draw.Label(val7, WorkTypes[i], (GameFont)0, Tokens.Muted, (TextAnchor)4);
+					}
+				}
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildVisual()
+	{
+		Family family = new Family
+		{
+			Title = "A0 · 原子层 —— 布局与视觉原子",
+			Sub = "6 件 · Atoms / VisualAtoms（比例 / 锚定 / 取色 / 图例 / 截断 / 角标）"
+		};
+		family.Add(new Atom
+		{
+			No = "18",
+			Name = "AspectBox 等比容器",
+			Api = "Atoms.AspectBox(Rect outer, float ratio) → Rect",
+			Desc = "锁定宽高比，内容等比适配居中——头像 / 缩略图 / 贴图卡排版的根治件，杜绝拉伸变形。",
+			Note = "原版 DrawTextureFitted 的等价几何：切比例时容器重排，内容不拉伸",
+			BodyH = CtrlTiny + 5f + 56f,
+			Paint = delegate(Rect r)
+			{
+				//IL_003a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0040: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0045: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0063: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0071: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0080: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0088: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0095: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ab: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00cf: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00da: Unknown result type (might be due to invalid IL or missing references)
+				float[] array8 = new float[4] { 1.7777778f, 1f, 1.3333334f, 0.5625f };
+				string[] array9 = new string[4] { "16:9", "1:1", "4:3", "9:16" };
+				VStack val9 = Layout.Column(r, 5f);
+				InputAtoms.Segmented(val9.Take(CtrlTiny), array9, ref aspectIdx);
+				Rect rest3 = val9.Rest;
+				HStack val10 = Layout.Row(val9.Take(rest3.height), 10f);
+				Rect val11 = Atoms.AspectBox(val10.Take(104f), array8[aspectIdx]);
+				Draw.Box(val11, Tokens.PanelRaised);
+				Draw.Border(val11, Tokens.BorderSoft);
+				Draw.Label(val11, array9[aspectIdx], (GameFont)0, Tokens.Accent, (TextAnchor)4);
+				Draw.EllipsisLabel(val10.Rest, "切档 → 容器重排，内容不拉伸（原版 DrawTextureFitted 的等价几何）", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "19",
+			Name = "AnchorFrame 九宫锚定",
+			Api = "Atoms.Anchor(Rect parent, Anchor9, Vector2 size, float margin) → Rect",
+			Desc = "声明式定位原子：九宫九锚（贴边 / 居中 / 拉伸）+ 边距。L4 布局的定位地基。",
+			Note = "点舞台任意位置吸附最近锚 · 规格对齐 .anchorstage{74px} + .tgt{26×18}",
+			BodyH = 74f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0002: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0036: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0040: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0045: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0046: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0057: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0050: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00cd: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d4: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0062: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0063: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0099: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0092: Unknown result type (might be due to invalid IL or missing references)
+				//IL_011f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_013d: Unknown result type (might be due to invalid IL or missing references)
+				Draw.Border(r, Tokens.BorderSoft);
+				Anchor9[] array7 = new Anchor9[9] { Anchor9.TopLeft, Anchor9.TopCenter, Anchor9.TopRight, Anchor9.MidLeft, Anchor9.Center, Anchor9.MidRight, Anchor9.BottomLeft, Anchor9.BottomCenter, Anchor9.BottomRight };
+				for (int k = 0; k < array7.Length; k++)
+				{
+					Rect val8 = Atoms.Anchor(r, array7[k], new Vector2(26f, 18f), 4f);
+					Draw.Box(val8, (k == anchorIdx) ? Tokens.Accent : Tokens.PanelRaised);
+					Draw.Border(val8, Tokens.BorderSoft);
+					Draw.Label(val8, array7[k].ToString().Substring(0, 2), (GameFont)0, (k == anchorIdx) ? Tokens.Window : Tokens.Dim, (TextAnchor)4);
+				}
+				if (Widgets.ButtonInvisible(r, true))
+				{
+					Vector2 mousePosition = Event.current.mousePosition;
+					int num = ((!(mousePosition.x < r.x + r.width / 3f)) ? ((!(mousePosition.x > r.x + r.width * 2f / 3f)) ? 1 : 2) : 0);
+					int num2 = ((!(mousePosition.y < r.y + r.height / 3f)) ? ((!(mousePosition.y > r.y + r.height * 2f / 3f)) ? 1 : 2) : 0);
+					anchorIdx = num2 * 3 + num;
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "20",
+			Name = "Swatch 色卡",
+			Api = "VisualAtoms.Swatch(Rect, Color, bool selected)",
+			Interactive = true,
+			Desc = "取色回显的色块原子（选中态 FocusRing）。官方依据：Verse GenColor 派生对比边框色。",
+			Note = "点色块切换选中态 · 规格对齐 .swatch{28×22}（基准表 §1.4）",
+			BodyH = 24f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0009: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0015: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0021: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0026: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0032: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0039: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0073: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0079: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0090: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00db: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ff: Unknown result type (might be due to invalid IL or missing references)
+				Color[] array4 = (Color[])(object)new Color[5]
+				{
+					Tokens.Warn,
+					Tokens.Info,
+					Tokens.Accent,
+					Tokens.Alive,
+					Tokens.Dead
+				};
+				string[] array5 = new string[5] { "金", "蓝", "青", "绿", "红" };
+				HStack val6 = Layout.Row(r, 6f);
+				for (int j = 0; j < array4.Length; j++)
+				{
+					Rect val7 = val6.Take(28f);
+					bool flag2 = Mathf.Approximately(swatchSel, (float)j);
+					VisualAtoms.Swatch(val7, array4[j], flag2);
+					if (Widgets.ButtonInvisible(val7, true))
+					{
+						swatchSel = j;
+					}
+				}
+				Draw.EllipsisLabel(val6.Rest, "当前：" + array5[Mathf.Clamp(Mathf.RoundToInt(swatchSel), 0, 4)], (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "21",
+			Name = "GradientBar 渐变图例条",
+			Api = "VisualAtoms.GradientBar(Rect, Color lo, Color hi, int segments)",
+			Desc = "渐变强度图例（HeatCalendar / 双端滑条的共伴），分段绘制即可平滑，零贴图。",
+			Note = "预览 .gradbar{height:11px}，两端标注 0 与 100 件/日",
+			BodyH = 32f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0022: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0023: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0035: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00fc: Unknown result type (might be due to invalid IL or missing references)
+				//IL_012c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0137: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0179: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01cf: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01c8: Unknown result type (might be due to invalid IL or missing references)
+				Rect val5 = default(Rect);
+				val5 = new Rect(r.x, r.y, r.width, 11f);
+				VisualAtoms.GradientBar(val5, Tokens.Accent, Tokens.Alive, 16);
+				bool flag = Mouse.IsOver(val5);
+				gradHover = (flag ? Mathf.Clamp01((Event.current.mousePosition.x - val5.x) / Mathf.Max(1f, val5.width)) : (-1f));
+				if (gradHover >= 0f)
+				{
+					Draw.Box(new Rect(val5.x + gradHover * val5.width - 1f, val5.y - 2f, 2f, 15f), Tokens.Text);
+				}
+				Draw.EllipsisLabel(new Rect(r.x, r.y + 14f, 60f, LineTiny), "0", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+				Draw.EllipsisLabel(new Rect(r.xMax - 90f, r.y + 14f, 90f, LineTiny), "100 件/日", (GameFont)0, Tokens.Dim, (TextAnchor)5);
+				Draw.EllipsisLabel(new Rect(r.x + 62f, r.y + 14f, Mathf.Max(0f, r.width - 156f), LineTiny), (gradHover >= 0f) ? ("读数 " + Mathf.RoundToInt(gradHover * 100f) + " 件/日") : "悬停读数", (GameFont)0, (gradHover >= 0f) ? Tokens.Text : Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "22",
+			Name = "OverflowFade 渐隐截断",
+			Api = "VisualAtoms.OverflowFade(Rect, string, Color bgColor, GameFont, Color?, float fadeWidth, int segments)",
+			Desc = "文字右缘渐隐（比「…」优雅的截断暗示）。需横向渐变遮罩贴图，TruncateToWidth 兜底。",
+			Note = "bgColor 必须是真实底色，否则渐隐带出现接缝 · 可换一条（长短交替）",
+			BodyH = LineSmall + 2f + CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0018: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0023: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0038: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0061: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0069: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0073: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0078: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0080: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d0: Unknown result type (might be due to invalid IL or missing references)
+				string[] array3 = new string[2] { "殖民地在第 12 象遭遇持续三天的有毒尘埃，储藏区的草药开始腐烂", "寒流来袭，作物冻伤。" };
+				VStack val3 = Layout.Column(r, 2f);
+				VisualAtoms.OverflowFade(val3.Take(LineSmall), array3[ovIdx], DemoBg, Tokens.FontBody, (Color?)Tokens.Text, 40f, 8);
+				Rect rest2 = val3.Rest;
+				HStack val4 = Layout.Row(val3.Take(rest2.height), 6f);
+				if (Widgets.ButtonText(val4.Take(72f), "换一条", true, true, true, (TextAnchor?)null))
+				{
+					ovIdx = (ovIdx + 1) % array3.Length;
+				}
+				Draw.EllipsisLabel(val4.Rest, (ovIdx == 0) ? "长文本 → 右缘渐隐" : "短文本 → 放得下，不渐隐", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "23",
+			Name = "PinBadge 钉选角标",
+			Api = "VisualAtoms.PinBadge(Rect host, bool pinned, Color?, float size, float margin)",
+			Interactive = true,
+			Desc = "钉选 / 置顶状态角标（AnchorFrame 右上定位的示范用户）。",
+			Note = "点卡片切换钉选；钉住的面板在真实场景里会跨页签常驻",
+			BodyH = 30f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0064: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0072: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0077: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0092: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0094: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d4: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00dd: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0108: Unknown result type (might be due to invalid IL or missing references)
+				HStack val = Layout.Row(r, 8f);
+				bool[] array = new bool[3] { pinA, pinB, pinC };
+				string[] array2 = new string[3] { "殖民者档案", "事件日志", "研究队列" };
+				for (int i = 0; i < array2.Length; i++)
+				{
+					Rect rest = val.Rest;
+					Rect val2 = val.Take(Mathf.Min(132f, rest.width));
+					if (val2.width < 40f)
+					{
+						break;
+					}
+					Draw.Box(val2, Tokens.PanelRaised);
+					Draw.Border(val2, Tokens.BorderSoft);
+					Draw.EllipsisLabel(new Rect(val2.x + 6f, val2.y, val2.width - 22f, val2.height), array2[i], (GameFont)0, Tokens.Text, (TextAnchor)3);
+					VisualAtoms.PinBadge(val2, array[i], (Color?)null, 12f, 2f);
+					if (Widgets.ButtonInvisible(val2, true))
+					{
+						switch (i)
+						{
+						case 0:
+							pinA = !pinA;
+							break;
+						case 1:
+							pinB = !pinB;
+							break;
+						default:
+							pinC = !pinC;
+							break;
+						}
+					}
+				}
+			}
+		});
+		families.Add(family);
+	}
+
+	private static void HoverFrame(Rect r)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+		if (Mouse.IsOver(r))
+		{
+			Draw.Border(r, Tokens.Accent);
+		}
+	}
+
+	private void BuildExt()
+	{
+		Family family = new Family
+		{
+			Title = "扩展原子族 · 输入",
+			Sub = "14 件 · InputAtoms / InputExAtoms / InputPlusAtoms / InputCandAtoms（深挖补录，编号 43–56）"
+		};
+		family.Add(new Atom
+		{
+			No = "43",
+			Name = "Segmented 分段选择",
+			Api = "InputAtoms.Segmented(Rect, string[], ref int) → bool",
+			Interactive = true,
+			Desc = "互斥分段选择 —— 取代原版缺失的 RadioButtonGroup。自绘 PanelRaised 底 + 段间分隔线，返回是否变化。",
+			Note = "⚠ 与验证台本地 helper 真重复（报告 D1）：本件已改走框架实现并删除本地版本",
+			BodyH = CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0020: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0048: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0079: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0099: Unknown result type (might be due to invalid IL or missing references)
+				string[] array2 = new string[3] { "全部", "只看异常", "只看空闲" };
+				InputAtoms.Segmented(Isset(r, 0f, CtrlTiny), array2, ref segIdx);
+				HoverFrame(Isset(r, 0f, CtrlTiny));
+				Draw.EllipsisLabel(new Rect(r.x, r.y + CtrlTiny + 2f, r.width, LineTiny), "index = " + segIdx + " · 与游戏内验证台同号 43", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "44",
+			Name = "ToggleSwitch 开关",
+			Api = "InputAtoms.ToggleSwitch(Rect, ref bool) → bool",
+			Interactive = true,
+			MinW = 40f,
+			Desc = "Track 固定 36×18 垂直居中；rect 宽 > 40 时右侧自动补 On/Off 文字。命中区是**整个 rect**（不只 track）。",
+			Note = "⚠ 与 34 号 EyeToggle 部分重叠（报告 D2）：按语义选——通断用本件，显隐用 EyeToggle",
+			BodyH = CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0016: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0052: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0057: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0064: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0069: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c3: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ce: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0082: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0096: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ad: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b4: Unknown result type (might be due to invalid IL or missing references)
+				HStack val14 = Layout.Row(r, 8f);
+				Rect rest7 = val14.Rest;
+				Rect val15 = val14.Take(Mathf.Min(130f, rest7.width));
+				if (InputAtoms.ToggleSwitch(val15, ref tglOn))
+				{
+				}
+				HoverFrame(val15);
+				rest7 = val14.Rest;
+				Rect val16 = val14.Take(Mathf.Min(130f, rest7.width));
+				if (val16.width > 40f)
+				{
+					bool flag = false;
+					InputAtoms.ToggleSwitch(val16, ref flag);
+					Draw.Box(val16, Draw.WithAlpha(Tokens.Window, 0.62f));
+					Draw.Border(val16, Tokens.BorderSoft);
+					Draw.Label(val16, "禁用", (GameFont)0, Tokens.Dim, (TextAnchor)5);
+				}
+				Draw.EllipsisLabel(val14.Rest, "左＝可用 · 次＝禁用态（压暗表达）", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "45",
+			Name = "Stepper 数值步进",
+			Api = "InputAtoms.Stepper(Rect, ref int, int min, int max, int step) → bool",
+			Interactive = true,
+			MinW = 60f,
+			Desc = "−/＋ 步进，内置 min/max 夹取（越界由 InputFmt.StepValue 处理）。左钮 26 宽、右钮绝对定位在 xMax−26。",
+			Note = "⚠ 与未落地的 NumericField 重叠（报告 D3）：点击步进 vs 键入，同一值的两条输入通道",
+			BodyH = CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0016: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0044: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+				HStack val12 = Layout.Row(r, 8f);
+				Rect rest6 = val12.Rest;
+				Rect val13 = val12.Take(Mathf.Min(150f, rest6.width));
+				if (InputAtoms.Stepper(val13, ref stepVal, 0, 20, 1))
+				{
+				}
+				HoverFrame(val13);
+				Draw.EllipsisLabel(val12.Rest, "0–20 · 技能等级口径 · 现 " + stepVal, (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "46",
+			Name = "SliderWithValue 滑条+数值",
+			Api = "InputAtoms.SliderWithValue(Rect, ref float, float min, float max, float roundTo, Func<float,string>) → bool",
+			Interactive = true,
+			Desc = "走官方 Widgets.HorizontalSlider（**ref 语义**）。数值标签画在 rect **上方 18px**，变化时下方 2px 处画指示线。",
+			Note = "⚠ 外扩绘制（报告 §4）：调用方必须为 rect 外预留「上 18 / 下 4」—— BodyH 已含",
+			BodyH = 18f + CtrlTiny + 6f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0054: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0055: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0090: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0099: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a4: Unknown result type (might be due to invalid IL or missing references)
+				Rect val9 = default(Rect);
+				val9 = new Rect(r.x, r.y + 18f, r.width, CtrlTiny);
+				HStack val10 = Layout.Row(val9, 8f);
+				Rect rest5 = val10.Rest;
+				Rect val11 = val10.Take(Mathf.Min(260f, rest5.width));
+				InputAtoms.SliderWithValue(val11, ref sliderVal, 0f, 1f, 0.01f, (Func<float, string>)((float v) => Mathf.RoundToInt(v * 100f) + "%"));
+				HoverFrame(val11);
+				Draw.EllipsisLabel(val10.Rest, "值由 ref 回写", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "47",
+			Name = "HotkeyBind 键位绑定",
+			Api = "InputAtoms.HotkeyBind(Rect, string label, string currentKey) → bool",
+			Interactive = true,
+			MinW = 254f,
+			Desc = "「动作 + 当前键位 + 改键」三格。内部固定总宽 254（标签 90 + 键框 84 + 按钮 64 + 间距）。",
+			Note = "⚠ 内部自排固定宽 254（报告 §4）：窗口窄于该值会被裁切，需自行降级",
+			BodyH = CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0016: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0060: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0069: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0074: Unknown result type (might be due to invalid IL or missing references)
+				HStack val7 = Layout.Row(r, 8f);
+				Rect rest4 = val7.Rest;
+				Rect val8 = val7.Take(Mathf.Min(254f, rest4.width));
+				if (InputAtoms.HotkeyBind(val8, "快速存档", keyArmed ? "F5（监听中）" : "F5"))
+				{
+					keyArmed = !keyArmed;
+				}
+				HoverFrame(val8);
+				Draw.EllipsisLabel(val7.Rest, "⚠ 捕获需官方 KeyPrefs 流程，本件只做显示 + 回调", (GameFont)0, Tokens.Warn, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "48",
+			Name = "TagPicker 多选标签",
+			Api = "InputAtoms.TagPicker(Rect, string[] all, bool[] picked, float gap) → bool",
+			Interactive = true,
+			Desc = "Chips 多选，选中打 ✓；`picked` 由调用方持有。**不折行** —— Row 会自动裁剪，超出即静默少画。",
+			Note = "与 DataAtoms.TraitChips 不重叠：那是「显示」，本件是「选择」",
+			BodyH = CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0048: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0053: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ad: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c9: Unknown result type (might be due to invalid IL or missing references)
+				InputAtoms.TagPicker(Isset(r, 0f, CtrlTiny), new string[4] { "勤劳", "嗜血", "乐天派", "夜猫子" }, tagPicked, 6f);
+				HoverFrame(Isset(r, 0f, CtrlTiny));
+				int num4 = 0;
+				for (int j = 0; j < tagPicked.Length; j++)
+				{
+					if (tagPicked[j])
+					{
+						num4++;
+					}
+				}
+				Draw.EllipsisLabel(new Rect(r.x, r.y + CtrlTiny + 2f, r.width, LineTiny), "已选 " + num4 + " 项 · 宽度不足时静默少画（需自行降级，报告 §3）", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "49",
+			Name = "DoubleSlider 双端范围条",
+			Api = "InputExAtoms.DoubleSlider(Rect, ref float lo, ref float hi, float min, float max, float roundTo) → bool",
+			Interactive = true,
+			MinW = 140f,
+			Desc = "范围条（高固定 12）+ Lower/Upper 两行滑条（各 18）。对齐原版 FloatRange / IntRange / QualityRange。",
+			Note = "最小高 54、实用最小宽 140（宽不足时滑条只剩 10px）",
+			BodyH = 58f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0032: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a3: Unknown result type (might be due to invalid IL or missing references)
+				InputExAtoms.DoubleSlider(Isset(r, 0f, 54f), ref dsLo, ref dsHi, 0f, 100f, 1f);
+				HoverFrame(Isset(r, 0f, 54f));
+				Draw.EllipsisLabel(new Rect(r.x, r.y + 56f, r.width, LineTiny), "区间 " + Mathf.RoundToInt(dsLo) + " – " + Mathf.RoundToInt(dsHi), (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "50",
+			Name = "ColorPicker HSV 取色器",
+			Api = "InputExAtoms.ColorPicker(Rect, ref Color, ref float h, ref float s, ref float v) → bool",
+			Interactive = true,
+			Desc = "预览色块（30 宽）+ #HEX + H/S/V 三条滑条。**配套 InputExFmt.HsvColor / RgbToHsv 为手写实现**，不依赖 Color.HSVToRGB。",
+			Note = "最小高 83（20 预览 + 三条 18 + 间隙）",
+			BodyH = 88f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0065: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c7: Unknown result type (might be due to invalid IL or missing references)
+				InputExAtoms.ColorPicker(Isset(r, 0f, 83f), ref cpColor, ref cpH, ref cpS, ref cpV);
+				HoverFrame(Isset(r, 0f, 83f));
+				Draw.EllipsisLabel(new Rect(r.x, r.y + 85f, r.width, LineTiny), "H " + cpH.ToString("0.00") + " · S " + cpS.ToString("0.00") + " · V " + cpV.ToString("0.00"), (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "51",
+			Name = "CycleButton 循环枚举钮",
+			Api = "InputExAtoms.CycleButton(Rect, string label, string[] values, ref int index) → bool",
+			Interactive = true,
+			MinW = 190f,
+			Desc = "单击循环到下一个枚举值 —— 占地最小、点击最少的状态切换件。**悬停时边框转 accent**（本件自带 hover 反馈）。",
+			Note = "⚠ 与 43 号 Segmented 部分重叠（报告 D5）：选项 ≤4 且空间足用 43，空间紧张用本件",
+			BodyH = CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0054: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0055: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0092: Unknown result type (might be due to invalid IL or missing references)
+				string[] array = new string[4] { "任意", "工作", "娱乐", "休息" };
+				HStack val5 = Layout.Row(r, 8f);
+				Rect rest3 = val5.Rest;
+				Rect val6 = val5.Take(Mathf.Min(190f, rest3.width));
+				InputExAtoms.CycleButton(val6, "作息", array, ref cycIdx);
+				Draw.EllipsisLabel(val5.Rest, "index = " + cycIdx + " → " + array[cycIdx], (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "52",
+			Name = "EditableLabel 行内编辑",
+			Api = "InputExAtoms.EditableLabel(Rect, ref string text, ref bool editing, ref string buffer) → bool",
+			Interactive = true,
+			Desc = "就地编辑：editing 为真时画 TextField（占 Rest），否则画文本 + 提交按钮。**editing / buffer 全由调用方持有**。",
+			Note = "与 SearchField 不同：本件是就地改名，不是防抖搜索",
+			BodyH = CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0016: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0053: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0082: Unknown result type (might be due to invalid IL or missing references)
+				HStack val3 = Layout.Row(r, 8f);
+				Rect rest2 = val3.Rest;
+				Rect val4 = val3.Take(Mathf.Min(240f, rest2.width));
+				if (InputExAtoms.EditableLabel(val4, ref editText, ref editing, ref editBuffer))
+				{
+					editing = false;
+				}
+				HoverFrame(val4);
+				Draw.EllipsisLabel(val3.Rest, "editing = " + editing + " · text = " + editText, (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "53",
+			Name = "PriorityGrid 优先级网格",
+			Api = "InputExAtoms.PriorityGrid(Rect, string[] rowLabels, string[] colLabels, int[] values, out int hitIndex) → bool",
+			Interactive = true,
+			Desc = "列头（高 16）+ 行标签 + 每格一个整数值，点格子递进。工作优先级 / 技能分配 / 政策矩阵通用。",
+			Note = "最小高 = 18 + rows×rowH；与 TimetableMatrix / PaintStrokeGrid 构成「矩阵族」（报告 D7/D8）",
+			BodyH = 80f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0063: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006e: Unknown result type (might be due to invalid IL or missing references)
+				int num3 = default(int);
+				InputExAtoms.PriorityGrid(Isset(r, 0f, 78f), new string[3] { "建造", "采矿", "手工" }, new string[4] { "P1", "P2", "P3", "P4" }, pgVals, out num3);
+				HoverFrame(Isset(r, 0f, 78f));
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "54",
+			Name = "TimetableMatrix 时间表矩阵",
+			Api = "InputExAtoms.TimetableMatrix(Rect, string[] rowLabels, int[] states, out int hitIndex) → bool",
+			Interactive = true,
+			Desc = "作息表：行 = 时间轴，列 = 24 时，点格子循环状态（官方 TimeAssignmentDef 四态；状态 2 用更低透明度）。",
+			Note = "最小高 = rows×rowH；行标签由 rowLabels 提供",
+			BodyH = 48f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0050: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0087: Unknown result type (might be due to invalid IL or missing references)
+				if (ttStates[8] == 0 && ttStates[20] == 0)
+				{
+					for (int i = 0; i < 24; i++)
+					{
+						ttStates[i] = ((i >= 8 && i < 18) ? 1 : ((i >= 20 || i < 6) ? 3 : 0));
+					}
+				}
+				int num2 = default(int);
+				InputExAtoms.TimetableMatrix(Isset(r, 0f, 44f), new string[1] { "作息" }, ttStates, out num2);
+				HoverFrame(Isset(r, 0f, 44f));
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "55",
+			Name = "SliderTicks 刻度吸附滑条",
+			Api = "InputPlusAtoms.SliderTicks(Rect, ref float, float[] ticks, float min, float max) → bool",
+			Interactive = true,
+			MinW = 178f,
+			Desc = "拖动后吸附到最近刻度 —— 技能等级 / 品质档位 / 离散参数的专用滑条。",
+			Note = "⚠ 与 46 号部分重叠（报告 D4）：本件是 SliderWithValue 的超集（多 ticks），连续量用 46、离散档用本件。宽需 ≥ 178",
+			BodyH = CtrlTiny,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0016: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0028: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0056: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0073: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0080: Unknown result type (might be due to invalid IL or missing references)
+				HStack val = Layout.Row(r, 8f);
+				Rect rest = val.Rest;
+				Rect val2 = val.Take(Mathf.Min(280f, rest.width));
+				InputPlusAtoms.SliderTicks(val2, ref ticksVal, new float[5] { 0f, 5f, 10f, 15f, 20f }, 0f, 20f);
+				HoverFrame(val2);
+				int num = Mathf.Clamp(Mathf.RoundToInt(ticksVal), 0, 20);
+				Draw.EllipsisLabel(val.Rest, SkillRanks[num], (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "56",
+			Name = "BatchSliders 批量滑条",
+			Api = "InputCandAtoms.BatchSliders(Rect, SliderCfg[] cfg, float[] values)",
+			Interactive = true,
+			MinW = 200f,
+			Desc = "一组同规格滑条，由 SliderCfg{label,min,max,unit} 驱动 —— 设置页与批量参数调整的紧凑形态。返回 void（值就地写入 values）。",
+			Note = "⚠ 本质是**容器/组合件**（报告 D9），不计入原子口径统计",
+			BodyH = 72f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0023: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				InputCandAtoms.BatchSliders(Isset(r, 0f, 72f), batchCfg, batchVals);
+				HoverFrame(Isset(r, 0f, 72f));
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildBase1()
+	{
+		Family family = new Family
+		{
+			Title = "宝典 · A1/A2 展示件",
+			Sub = "6 件 · 组合范式（RUIF 无内置件，用已有原子组装）· 编号 57–62"
+		};
+		family.Add(new Atom
+		{
+			No = "57",
+			Name = "StatChip 状态芯片",
+			Api = "组合范式 · StatChip(icon, label, value, trend)",
+			Desc = "图标 + 标签 + 大数值 + 趋势箭头的紧凑指标件，仪表盘原子单元。",
+			Note = "基座：Box + Border + 单元矩形五段排版｜图标位用汉字（IMGUI 字库对 emoji 不可靠，接图标族后可替换）",
+			BodyH = 34f,
+			MinW = 210f,
+			MinH = 34f,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0022: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0062: Unknown result type (might be due to invalid IL or missing references)
+				HStack row2 = Layout.Row(r, 8f);
+				StatChip(row2, "人", "人口", "12", "▲2", Tokens.Alive);
+				StatChip(row2, "战", "威胁", "3.4", "▼0.6", Tokens.Dead);
+				StatChip(row2, "物", "物资", "982", "—", Tokens.Dim);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "58",
+			Name = "DeltaBadge 涨跌徽章",
+			Api = "组合范式 · DeltaBadge(float delta01, string unit)",
+			Desc = "独立趋势徽章：正绿负红零灰（Trend 语义驱动），可附加环比说明。",
+			Note = "点徽章选中（选中转 accent 边，状态归调用方）｜三态并排，便于一次看全语义色",
+			BodyH = 54f,
+			MinW = 190f,
+			MinH = 54f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0025: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0103: Unknown result type (might be due to invalid IL or missing references)
+				//IL_010e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0097: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00b5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ca: Unknown result type (might be due to invalid IL or missing references)
+				HStack val14 = Layout.Row(new Rect(r.x, r.y, r.width, 34f), 8f);
+				float[] array6 = new float[3] { 0.18f, -0.07f, 0f };
+				string[] array7 = new string[3] { "% 环比", "% 环比", "持平" };
+				for (int k = 0; k < array6.Length; k++)
+				{
+					Rect rest = val14.Rest;
+					float width = rest.width;
+					if (width < 44f)
+					{
+						break;
+					}
+					Rect val15 = val14.Take(Mathf.Min(112f, width));
+					DeltaBadge(val15, array6[k], array7[k], badgeSlot == k);
+					if (Widgets.ButtonInvisible(val15, true))
+					{
+						badgeSlot = k;
+					}
+					HoverFrame(val15);
+				}
+				Draw.EllipsisLabel(new Rect(r.x, r.y + 36f, r.width, LineTiny), "点任一徽章选中 · 语义色随正负零（涨绿 / 跌红 / 持平灰）", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "59",
+			Name = "AvatarPawn 殖民者头像环",
+			Api = "组合范式 · AvatarPawn(Texture portrait, int tier)",
+			Desc = "肖像 + 职称档位色环（对齐职称档位色）+ 状态角标。环与角标为原生绘制，肖像由消费方提供。",
+			Note = "宝典原文：肖像贴图由消费 Mod 提供｜本件无贴图，用首字代肖像位；色环 3 档对齐宝典演示（正高 / 副高 / 阵亡）",
+			BodyH = 62f,
+			MinW = 200f,
+			MinH = 62f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0025: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0052: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0057: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0063: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a4: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0167: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0172: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c4: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00cb: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00fc: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0106: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0112: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0128: Unknown result type (might be due to invalid IL or missing references)
+				HStack val11 = Layout.Row(new Rect(r.x, r.y, r.width, 42f), 14f);
+				string[] array3 = new string[3] { "张", "李", "王" };
+				Color[] array4 = (Color[])(object)new Color[3]
+				{
+					Tokens.Alive,
+					Tokens.Info,
+					Tokens.Dead
+				};
+				string[] array5 = new string[3] { "正高", "副高", "阵亡" };
+				for (int j = 0; j < array3.Length; j++)
+				{
+					Rect val12 = val11.Take(46f);
+					if (val12.width < 30f)
+					{
+						break;
+					}
+					VStack val13 = Layout.Column(val12, 2f);
+					Avatar(val13.Take(34f), array3[j], array4[j], avatarSel == j);
+					Draw.EllipsisLabel(val13.Rest, array5[j], (GameFont)0, Tokens.Dim, (TextAnchor)4);
+					if (Widgets.ButtonInvisible(val12, true))
+					{
+						avatarSel = j;
+					}
+					HoverFrame(val12);
+				}
+				Draw.EllipsisLabel(new Rect(r.x, r.yMax - LineTiny, r.width, LineTiny), "点选切换 · 环色 = 职称档位（金环正高 / 蓝环副高 / 红环阵亡）", (GameFont)0, Tokens.Muted, (TextAnchor)3);
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "60",
+			Name = "QualityStar 品质星阶",
+			Api = "组合范式 · QualityStar(QualityCategory q)",
+			Desc = "对齐原版 QualityCategory 全档（Awful→Legendary），色值取品质语义色，跨主题可辨。",
+			Note = "⚠ C 类（预览缺失）：宝典预览列 6 行，原版 QualityCategory 实为 7 档（另有 Poor 较差）——本件按原版 7 档落地",
+			BodyH = 84f,
+			MinW = 240f,
+			MinH = 84f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_0081: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0095: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00aa: Unknown result type (might be due to invalid IL or missing references)
+				QualityCategory[] array2 = new QualityCategory[7] { QualityCategory.Awful, QualityCategory.Poor, QualityCategory.Normal, QualityCategory.Good, QualityCategory.Excellent, QualityCategory.Masterwork, QualityCategory.Legendary };
+				float num2 = Mathf.Max(LineTiny + 2f, (r.height - 3f) / 4f);
+				float num3 = (r.width - 8f) * 0.5f;
+				Rect val10 = default(Rect);
+				for (int i = 0; i < array2.Length; i++)
+				{
+					val10 = new Rect(r.x + (float)(i % 2) * (num3 + 8f), r.y + (float)(i / 2) * (num2 + 1f), num3, num2);
+					QualityRow(val10, array2[i], qualitySel == i);
+					if (Widgets.ButtonInvisible(val10, true))
+					{
+						qualitySel = i;
+					}
+					HoverFrame(val10);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "61",
+			Name = "Skeleton 骨架屏",
+			Api = "组合范式 · Skeleton(SkeletonLayout)",
+			Desc = "数据未就绪时的呼吸占位（透明度 0.5~1.0 正弦插值，IMGUI 每帧重绘天然支持）。替代「空白等待」。",
+			Note = "点一下切「加载完成」：同一矩形内换成真实内容 —— 空态与就绪态共用一次布局",
+			BodyH = 96f,
+			MinW = 190f,
+			MinH = 96f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_011e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0124: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0129: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0131: Unknown result type (might be due to invalid IL or missing references)
+				//IL_013b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0140: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0148: Unknown result type (might be due to invalid IL or missing references)
+				//IL_014d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0153: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0160: Unknown result type (might be due to invalid IL or missing references)
+				//IL_016a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_016f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0177: Unknown result type (might be due to invalid IL or missing references)
+				//IL_017c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01a0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01a5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01ab: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01bd: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01c2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01e6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01eb: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01f7: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0209: Unknown result type (might be due to invalid IL or missing references)
+				//IL_020e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_021a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0245: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0250: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0034: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003f: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0058: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0066: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0070: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_009e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00bc: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00c1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e0: Unknown result type (might be due to invalid IL or missing references)
+				if (Widgets.ButtonInvisible(r, true))
+				{
+					skelLoaded = !skelLoaded;
+				}
+				HoverFrame(r);
+				if (skelLoaded)
+				{
+					VStack val3 = Layout.Column(r, 4f);
+					HStack val4 = Layout.Row(val3.Take(LineSmall + 6f), 8f);
+					Avatar(val4.Take(28f), "蓝", Tokens.Accent, selected: false);
+					Draw.EllipsisLabel(val4.Rest, Names[0], (GameFont)1, Tokens.Text, (TextAnchor)3);
+					Draw.EllipsisLabel(val3.Take(LineTiny), "心情 72% · 健康 94% · 无病症", (GameFont)0, Tokens.Muted, (TextAnchor)3);
+					Shapes.GradientRule(val3.Take(LineTiny), Tokens.Accent, 10);
+					Draw.EllipsisLabel(val3.Take(LineTiny), "数据已就绪（再点回到骨架态）", (GameFont)0, Tokens.Alive, (TextAnchor)3);
+				}
+				else
+				{
+					float num = Mathf.Lerp(0.5f, 1f, (Mathf.Sin(t * 2.2f) + 1f) * 0.5f);
+					VStack val5 = Layout.Column(r, 4f);
+					HStack val6 = Layout.Row(val5.Take(34f), 9f);
+					Draw.Box(val6.Take(34f), Draw.WithAlpha(Tokens.BorderSoft, num));
+					VStack val7 = Layout.Column(val6.Rest, 6f);
+					Rect val8 = val7.Take(9f);
+					Draw.Box(new Rect(val8.x, val8.y, val8.width * 0.6f, val8.height), Draw.WithAlpha(Tokens.BorderSoft, num));
+					Rect val9 = val7.Take(7f);
+					Draw.Box(new Rect(val9.x, val9.y, val9.width * 0.85f, val9.height), Draw.WithAlpha(Tokens.BorderSoft, num * 0.7f));
+					Draw.Box(val5.Take(8f), Draw.WithAlpha(Tokens.BorderSoft, num * 0.8f));
+					Draw.EllipsisLabel(new Rect(r.x, r.yMax - LineTiny, r.width, LineTiny), "加载中… 骨架占位（点一下切到就绪态）", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "62",
+			Name = "KeyCap 键位帽",
+			Api = "组合范式 · KeyCap(string key)",
+			Desc = "键位显示件（立体下边框拟物）。快捷键提示、命令面板、设置键位列表通用。",
+			Note = "立体感 = 下边 2px 暗边；按下时暗边收 1px 且文字下移 1px —— 拟物件才有的按压反馈",
+			BodyH = 50f,
+			MinW = 230f,
+			MinH = 50f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0019: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0020: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0025: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0026: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0059: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0070: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00be: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d9: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0100: Unknown result type (might be due to invalid IL or missing references)
+				//IL_010b: Unknown result type (might be due to invalid IL or missing references)
+				VStack val = Layout.Column(r, 2f);
+				Rect val2 = val.Take(26f);
+				HStack row = Layout.Row(val2, 6f);
+				KeyCap(row, "Ctrl", keyDown == 0);
+				Draw.EllipsisLabel(row.Take(10f), "+", (GameFont)0, Tokens.Dim, (TextAnchor)4);
+				KeyCap(row, "K", keyDown == 1);
+				Draw.EllipsisLabel(row.Rest, "打开命令面板", (GameFont)0, Tokens.Muted, (TextAnchor)3);
+				KeyCapBox(new Rect(r.xMax - 40f, r.y, 40f, 26f), "Esc", keyDown == 2);
+				if (Widgets.ButtonInvisible(r, true))
+				{
+					keyDown = (keyDown + 1) % 3;
+				}
+				HoverFrame(r);
+				Draw.EllipsisLabel(new Rect(val2.x, val2.yMax + 2f, val2.width, LineTiny), "点任意处循环按下状态（Ctrl → K → Esc）", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+			}
+		});
+		families.Add(family);
+	}
+
+	private static void StatChip(HStack row, string icon, string label, string value, string trend, Color trendColor)
+	{
+		//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0047: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0063: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0069: Unknown result type (might be due to invalid IL or missing references)
+		//IL_006a: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0075: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0076: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0081: Unknown result type (might be due to invalid IL or missing references)
+		//IL_008c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0096: Unknown result type (might be due to invalid IL or missing references)
+		//IL_009b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00ab: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00b2: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00cd: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00d4: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00ef: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00f6: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0104: Unknown result type (might be due to invalid IL or missing references)
+		//IL_010c: Unknown result type (might be due to invalid IL or missing references)
+		float num = 12f + Measure.Width(icon, (GameFont)0) + 5f + Measure.Width(label, (GameFont)0) + 7f + Measure.Width(value, (GameFont)1) + 6f + Measure.Width(trend, (GameFont)0) + 8f;
+		Rect rest = row.Rest;
+		if (!(rest.width < 34f))
+		{
+			Rect val = row.Take(num);
+			Draw.Box(val, Tokens.Card);
+			Draw.Border(val, Tokens.BorderSoft);
+			HStack val2 = Layout.Row(Layout.Inset(val, 5f, 0f), 0f);
+			Draw.EllipsisLabel(val2.Take(Measure.Width(icon, (GameFont)0) + 5f), icon, (GameFont)0, Tokens.Muted, (TextAnchor)3);
+			Draw.EllipsisLabel(val2.Take(Measure.Width(label, (GameFont)0) + 7f), label, (GameFont)0, Tokens.Muted, (TextAnchor)3);
+			Draw.Label(val2.Take(Measure.Width(value, (GameFont)1) + 6f), value, (GameFont)1, Tokens.Text, (TextAnchor)3);
+			Draw.Label(val2.Rest, trend, (GameFont)0, trendColor, (TextAnchor)3);
+		}
+	}
+
+	private static void DeltaBadge(Rect r, float delta01, string unit, bool selected)
+	{
+		//IL_001f: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0024: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0025: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0026: Unknown result type (might be due to invalid IL or missing references)
+		//IL_002c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0037: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0018: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0011: Unknown result type (might be due to invalid IL or missing references)
+		//IL_003e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_003b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00b0: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00b3: Unknown result type (might be due to invalid IL or missing references)
+		Color val = ((delta01 > 0.001f) ? Tokens.Alive : ((delta01 < -0.001f) ? Tokens.Dead : Tokens.Muted));
+		Draw.Box(r, Draw.WithAlpha(val, 0.15f));
+		Draw.Border(r, selected ? Tokens.Accent : val);
+		string text = ((delta01 > 0.001f) ? ("▲ +" + Mathf.RoundToInt(delta01 * 100f) + "%") : ((delta01 < -0.001f) ? ("▼ −" + Mathf.RoundToInt((0f - delta01) * 100f) + "%") : ("— " + unit)));
+		Draw.EllipsisLabel(r, text, (GameFont)1, val, (TextAnchor)4);
+	}
+
+	private static void Avatar(Rect r, string initial, Color ring, bool selected)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0002: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0008: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0013: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0053: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0058: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00a8: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00ab: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0098: Unknown result type (might be due to invalid IL or missing references)
+		//IL_009d: Unknown result type (might be due to invalid IL or missing references)
+		Draw.Box(r, Draw.WithAlpha(ring, 0.18f));
+		Draw.Border(r, Tokens.Card);
+		Draw.Border(new Rect(r.x - 1f, r.y - 1f, r.width + 2f, r.height + 2f), ring);
+		if (selected)
+		{
+			Draw.Border(new Rect(r.x - 2f, r.y - 2f, r.width + 4f, r.height + 4f), Tokens.Accent);
+		}
+		Draw.Label(r, initial, (GameFont)1, Tokens.Text, (TextAnchor)4);
+	}
+
+	private static void QualityRow(Rect r, QualityCategory q, bool selected)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0008: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0009: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000e: Unknown result type (might be due to invalid IL or missing references)
+		//IL_000f: Unknown result type (might be due to invalid IL or missing references)
+		//IL_001a: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0020: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0013: Unknown result type (might be due to invalid IL or missing references)
+		//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0036: Unknown result type (might be due to invalid IL or missing references)
+		//IL_002f: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0041: Unknown result type (might be due to invalid IL or missing references)
+		//IL_004c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0056: Unknown result type (might be due to invalid IL or missing references)
+		//IL_005b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_008b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0090: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00d5: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00da: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00e1: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00ab: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00b2: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00bc: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00c1: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00c8: Unknown result type (might be due to invalid IL or missing references)
+		int num = QualitySteps(q);
+		Color val = QualityTint(q);
+		Draw.Box(r, selected ? Draw.WithAlpha(val, 0.14f) : Tokens.Card);
+		Draw.Border(r, selected ? Tokens.Accent : Tokens.BorderSoft);
+		HStack val2 = Layout.Row(Layout.Inset(r, 5f, 0f), 6f);
+		string text = new string('★', num) + new string('☆', 6 - num);
+		float num2 = Measure.Width(text, (GameFont)0) + 3f;
+		Rect rest = val2.Rest;
+		if (rest.width >= num2)
+		{
+			Draw.Label(val2.Take(num2), text, (GameFont)0, val, (TextAnchor)3);
+			Draw.EllipsisLabel(val2.Rest, QualityLabel(q), (GameFont)0, val, (TextAnchor)3);
+		}
+		else
+		{
+			Draw.EllipsisLabel(val2.Rest, QualityLabel(q), (GameFont)0, val, (TextAnchor)3);
+		}
+	}
+
+	private static int QualitySteps(QualityCategory q)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0002: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0003: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0004: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0005: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0023: Expected I4, but got Unknown
+		return (int)q switch
+		{
+			0 => 1, 
+			1 => 2, 
+			2 => 3, 
+			3 => 4, 
+			4 => 5, 
+			5 => 6, 
+			_ => 6, 
+		};
+	}
+
+	private static string QualityLabel(QualityCategory q)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0002: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0003: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0004: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0005: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0023: Expected I4, but got Unknown
+		return (int)q switch
+		{
+			0 => "粗劣", 
+			1 => "较差", 
+			2 => "普通", 
+			3 => "良好", 
+			4 => "优秀", 
+			5 => "杰作", 
+			_ => "传奇", 
+		};
+	}
+
+	private static Color QualityTint(QualityCategory q)
+	{
+		//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0002: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0003: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0004: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0005: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0023: Expected I4, but got Unknown
+		//IL_0025: Unknown result type (might be due to invalid IL or missing references)
+		//IL_002a: Unknown result type (might be due to invalid IL or missing references)
+		//IL_002d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0032: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0035: Unknown result type (might be due to invalid IL or missing references)
+		//IL_003a: Unknown result type (might be due to invalid IL or missing references)
+		//IL_003d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0042: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0045: Unknown result type (might be due to invalid IL or missing references)
+		//IL_004a: Unknown result type (might be due to invalid IL or missing references)
+		//IL_004d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0052: Unknown result type (might be due to invalid IL or missing references)
+		//IL_005d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0055: Unknown result type (might be due to invalid IL or missing references)
+		//IL_005a: Unknown result type (might be due to invalid IL or missing references)
+		return (Color)((int)q switch
+		{
+			0 => Tokens.Dim, 
+			1 => Tokens.Muted, 
+			2 => Tokens.Muted, 
+			3 => Tokens.Alive, 
+			4 => Tokens.Info, 
+			5 => Tokens.Accent, 
+			_ => Tokens.Accent, 
+		});
+	}
+
+	private static void KeyCap(HStack row, string key, bool down)
+	{
+		//IL_001b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0020: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0038: Unknown result type (might be due to invalid IL or missing references)
+		float num = Mathf.Max(30f, Measure.Width(key, (GameFont)0) + 14f);
+		Rect rest = row.Rest;
+		if (!(rest.width < 14f))
+		{
+			KeyCapBox(row.Take(num), key, down);
+		}
+	}
+
+	private static void KeyCapBox(Rect cap, string key, bool down)
+	{
+		//IL_002b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0030: Unknown result type (might be due to invalid IL or missing references)
+		//IL_003b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_003c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0066: Unknown result type (might be due to invalid IL or missing references)
+		//IL_006b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00a5: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00b6: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00af: Unknown result type (might be due to invalid IL or missing references)
+		int num = (down ? 1 : 2);
+		Draw.Box(new Rect(cap.x, cap.y + (float)num, cap.width, cap.height - (float)num), Tokens.Border);
+		Draw.Box(cap, Tokens.Card);
+		Draw.Border(new Rect(cap.x, cap.y, cap.width, cap.height - (float)num), Tokens.BorderSoft);
+		Draw.EllipsisLabel(new Rect(cap.x, cap.y + (down ? 1f : 0f), cap.width, cap.height - (float)num), key, (GameFont)0, down ? Tokens.Accent : Tokens.Text, (TextAnchor)4);
+	}
+
+	private void BuildDInput()
+	{
+		Family family = new Family
+		{
+			Title = "宝典 · d-input 输入",
+			Sub = "1 件 · InputAtoms.SearchField（防抖搜索框）· 编号 63"
+		};
+		family.Add(new Atom
+		{
+			No = "63",
+			Name = "SearchField 搜索框",
+			Api = "InputAtoms.SearchField(Rect, ref query, ref buffer, placeholder, ref lastInputTime, delay) → bool",
+			Desc = "包装 Widgets.TextField：buffer 即时回显，query 防抖 200ms 后才更新；返回 query 是否刚更新。",
+			Note = "⚠ 宝典 sig 写 SearchField(Rect, ref query, bool clearable)，RUIF 实现无 clearable、不画清空钮 ⇒ 清空钮由调用方绘制（本件已补）｜placeholder 由原子自画，勿重复",
+			BodyH = 68f,
+			MinW = 220f,
+			MinH = 68f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_0001: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0007: Unknown result type (might be due to invalid IL or missing references)
+				//IL_000c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0014: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0019: Unknown result type (might be due to invalid IL or missing references)
+				//IL_001a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0020: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0025: Unknown result type (might be due to invalid IL or missing references)
+				//IL_002e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0033: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0068: Unknown result type (might be due to invalid IL or missing references)
+				//IL_006d: Unknown result type (might be due to invalid IL or missing references)
+				//IL_007e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0083: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a8: Unknown result type (might be due to invalid IL or missing references)
+				//IL_004c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0053: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e0: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0102: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0107: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0109: Unknown result type (might be due to invalid IL or missing references)
+				//IL_010b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0116: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0118: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0120: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0128: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00fb: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00f4: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0135: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0165: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01e6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_01df: Unknown result type (might be due to invalid IL or missing references)
+				//IL_02aa: Unknown result type (might be due to invalid IL or missing references)
+				//IL_02af: Unknown result type (might be due to invalid IL or missing references)
+				//IL_02b1: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0321: Unknown result type (might be due to invalid IL or missing references)
+				//IL_031a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_033b: Unknown result type (might be due to invalid IL or missing references)
+				VStack val = Layout.Column(r, 2f);
+				Rect val2 = val.Take(CtrlTiny);
+				HStack val3 = Layout.Row(val2, 4f);
+				float num = 24f;
+				Rect rest = val3.Rest;
+				if (rest.width < num + 44f)
+				{
+					Draw.EllipsisLabel(val2, "空间不足（D6）", (GameFont)0, Tokens.Dead, (TextAnchor)3);
+				}
+				else
+				{
+					rest = val3.Rest;
+					Rect val4 = val3.Take(rest.width - num - 4f);
+					Rect val5 = default(Rect);
+					val5 = new Rect(val4.xMax + 4f, val4.y, num, val4.height);
+					InputAtoms.SearchField(val4, ref sfQuery, ref sfBuffer, "搜索殖民者…", ref sfLast, 0.2f);
+					bool flag = !string.IsNullOrEmpty(sfBuffer);
+					bool flag2 = flag && Mouse.IsOver(val5);
+					Color val6 = ((!flag) ? Tokens.Dim : (flag2 ? Tokens.Accent : Tokens.Muted));
+					Draw.Box(val5, Tokens.Card);
+					Draw.Border(val5, val6);
+					Draw.Label(val5, "×", (GameFont)1, val6, (TextAnchor)4);
+					if (flag && Widgets.ButtonInvisible(val5, true))
+					{
+						sfBuffer = "";
+						sfQuery = "";
+					}
+					Draw.EllipsisLabel(val.Take(LineTiny), "实时 buffer：" + ((sfBuffer.Length == 0) ? "（空）" : ("「" + sfBuffer + "」")) + "\u3000防抖 query：" + ((sfQuery.Length == 0) ? "（空）" : ("「" + sfQuery + "」")), (GameFont)0, (sfBuffer != sfQuery) ? Tokens.Warn : Tokens.Dim, (TextAnchor)3);
+					int num2 = ((sfQuery.Length == 0) ? Names.Length : 0);
+					string text = "";
+					for (int i = 0; i < Names.Length; i++)
+					{
+						if (sfQuery.Length != 0 && Names[i].IndexOf(sfQuery, StringComparison.OrdinalIgnoreCase) >= 0)
+						{
+							num2++;
+							if (text.Length < 30)
+							{
+								text = text + ((text.Length > 0) ? " · " : "") + Names[i];
+							}
+						}
+					}
+					Rect val7 = val.Take(LineTiny);
+					Draw.EllipsisLabel(val7, "命中 " + num2 + " / " + Names.Length + ((num2 > 0 && sfQuery.Length > 0) ? ("：" + text) : ""), (GameFont)0, (num2 > 0) ? Tokens.Alive : Tokens.Dead, (TextAnchor)3);
+					if (sfQuery.Length > 0 && Widgets.ButtonInvisible(val7, true))
+					{
+						sfBuffer = "";
+						sfQuery = "";
+					}
+				}
+			}
+		});
+		families.Add(family);
+	}
+
+	private void BuildDData()
+	{
+		Family family = new Family
+		{
+			Title = "宝典 · d-data 数据展示",
+			Sub = "3 件 · DataAtoms.PawnCard / SkillBars / NeedsPanel（真名落地）· 编号 64–66"
+		};
+		family.Add(new Atom
+		{
+			No = "64",
+			Name = "PawnCard 殖民者卡",
+			Api = "DataAtoms.PawnCard(Rect, initial, name, title, mood01, health01, status) → void",
+			Desc = "头像环 + 名字职称 + 心情/健康微型条 + 状态胶囊一体卡。档案馆与列表页的 hero 组件。",
+			Note = "组件**自画底与边框**（Box+Border）⇒ 调用方不得再套底｜内部：头像 ≤34、状态胶囊定宽 52、双条各定宽 60 ⇒ rect 高 ≥ 62、宽 ≥ 190｜数值为宝典预览样例（同源）",
+			BodyH = 84f,
+			MinW = 200f,
+			MinH = 84f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_008e: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0035: Unknown result type (might be due to invalid IL or missing references)
+				//IL_003c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00ba: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00d6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00fd: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0156: Unknown result type (might be due to invalid IL or missing references)
+				Rect val3 = default(Rect);
+				val3 = new Rect(r.x, r.y, r.width, 62f);
+				if (val3.width < 190f)
+				{
+					Draw.EllipsisLabel(val3, "空间不足（D6）", (GameFont)0, Tokens.Dead, (TextAnchor)3);
+				}
+				else
+				{
+					float num5 = 0.82f + 0.05f * Mathf.Sin(t * 0.9f);
+					float num6 = Mathf.Clamp01(0.94f + 0.04f * Mathf.Sin(t * 1.3f));
+					DataAtoms.PawnCard(val3, "张", "张三", "正高 · 总工程师", num5, num6, pcSelected ? "已选中" : "在线");
+					if (Widgets.ButtonInvisible(val3, true))
+					{
+						pcSelected = !pcSelected;
+					}
+					HoverFrame(val3);
+					Draw.EllipsisLabel(new Rect(r.x, r.y + 64f, r.width, LineTiny), "心情 " + Mathf.RoundToInt(num5 * 100f) + " · 健康 " + Mathf.RoundToInt(num6 * 100f) + "｜点卡切换状态胶囊", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "65",
+			Name = "SkillBars 技能条组",
+			Api = "DataAtoms.SkillBars(Rect, string[] names, float[] levels, maxLevel = 20f, columns = 2) → void",
+			Desc = "技能条组：深度 0~20 语义色阶，行内叠印等级数字。",
+			Note = "⚠ 宝典 desc 声称「10/20 刻度线 + 燃烧标识 + 无兴趣置灰」，**实现里没有**（只有条 + 数值）——登记为 A 类差异｜点条切 columns 1↔2，演示列数自适应｜数据为宝典预览样例（5 项，columns=2 时第 6 格自然留空）",
+			BodyH = 82f,
+			MinW = 230f,
+			MinH = 82f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_0073: Unknown result type (might be due to invalid IL or missing references)
+				//IL_008a: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005b: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0062: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a6: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00cd: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e9: Unknown result type (might be due to invalid IL or missing references)
+				int num3 = (sbOneCol ? 1 : 2);
+				float num4 = Mathf.Ceil((float)SkillNames.Length / (float)num3) * (LineTiny + 2f);
+				Rect val2 = default(Rect);
+				val2 = new Rect(r.x, r.y, r.width, num4);
+				if (val2.width < 120f)
+				{
+					Draw.EllipsisLabel(val2, "空间不足（D6）", (GameFont)0, Tokens.Dead, (TextAnchor)3);
+				}
+				else
+				{
+					DataAtoms.SkillBars(val2, SkillNames, SkillBase, 20f, num3);
+					if (Widgets.ButtonInvisible(val2, true))
+					{
+						sbOneCol = !sbOneCol;
+					}
+					HoverFrame(val2);
+					Draw.EllipsisLabel(new Rect(r.x, val2.yMax + 2f, r.width, LineTiny), "columns = " + num3 + " · maxLevel = 20｜点条切换列数", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+				}
+			}
+		});
+		family.Add(new Atom
+		{
+			No = "66",
+			Name = "NeedsPanel 需求面板",
+			Api = "DataAtoms.NeedsPanel(Rect, string[] names, float[] values) → void",
+			Desc = "需求条组（心情/饮食/休息/娱乐）：名称 + 条 + 百分比，条色走阈值色带。",
+			Note = "⚠ 宝典 desc 声称「低于阈值自动闪红 + 心情修正浮动提示」，**实现是 TableFmt.BandColor 阈值色带 + 数值叠印**（无闪烁、无浮层）——登记为 A 类差异｜点面板切「全 4 项 / 前 2 项」，演示项数自适应｜数据为宝典预览样例",
+			BodyH = 108f,
+			MinW = 160f,
+			MinH = 108f,
+			Interactive = true,
+			Paint = delegate(Rect r)
+			{
+				//IL_0055: Unknown result type (might be due to invalid IL or missing references)
+				//IL_005c: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0098: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00a2: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00be: Unknown result type (might be due to invalid IL or missing references)
+				//IL_00e5: Unknown result type (might be due to invalid IL or missing references)
+				//IL_0101: Unknown result type (might be due to invalid IL or missing references)
+				int num = (npFew ? 2 : NeedNames.Length);
+				float num2 = (float)num * (LineTiny + 3f);
+				Rect val = default(Rect);
+				val = new Rect(r.x, r.y, r.width, num2);
+				if (val.width < 150f)
+				{
+					Draw.EllipsisLabel(val, "空间不足（D6）", (GameFont)0, Tokens.Dead, (TextAnchor)3);
+				}
+				else
+				{
+					string[] array = (npFew ? NeedNamesFew : NeedNames);
+					float[] array2 = (npFew ? NeedValuesFew : NeedValues);
+					DataAtoms.NeedsPanel(val, array, array2);
+					if (Widgets.ButtonInvisible(val, true))
+					{
+						npFew = !npFew;
+					}
+					HoverFrame(val);
+					Draw.EllipsisLabel(new Rect(r.x, val.yMax + 2f, r.width, LineTiny), "项数 " + num + " / 4（低值自动走告警色带）｜点面板切换项数", (GameFont)0, Tokens.Dim, (TextAnchor)3);
+				}
+			}
+		});
+		families.Add(family);
+	}
+}
+}

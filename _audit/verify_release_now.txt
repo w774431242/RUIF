@@ -1,0 +1,30 @@
+== 1. 版本一致性（构建产物为准） ==
+  [PASS] dll 版本 = 1.1.2
+  [PASS] 程序集版本 = 1.1.2.0（与 Api.VersionString 一致）
+  [PASS] RUIF About.xml = 1.1.2
+== 2. 程序集引用白名单（禁止 0Harmony） ==
+  [PASS] 引用面 = mscorlib, UnityEngine.CoreModule, Assembly-CSharp, UnityEngine.TextRenderingModule, System.Core, UnityEngine.IMGUIModule
+== 3. 开发区 vs 发布区 dll 哈希 ==
+  [PASS] RUIF 哈希一致 36EFB5809FEB1AAFC6FBF1619076FF8C
+== 4. 本地化键集合对称（中 ? 英） ==
+  [PASS] RUIF 键集合一致（各 60 键）
+== 5. 翻译键覆盖（键命名空间精确扫描 + 死键审计） ==
+  [PASS] RUIF 源码用到 60 个键，全部有翻译
+== 6. 发布区卫生 ==
+  [PASS] RUIF 无备份/垃圾文件（21 文件）
+  [PASS] RUIF 发布区与开发区镜像一致（无残留文件）
+  [PASS] 工坊条目 ID 受保护（3799502474 · 两区一致）
+== 7. 开发者包（DevDocs：离线可读的第三方接入入口） ==
+  [PASS] 开发者包结构完整（6 项必备文件）
+  [PASS] BUILD-INFO 版本 = 1.1.2
+  [PASS] 发布区 DevDocs 已同步（13 文件，已排除 IDE 构建缓存）
+== 8. XML 良构（About / Languages / Patches 全量） ==
+  [PASS] XML 全部良构（3 个文件）
+  [PASS] RUIF packageId = PersonalChronicle.RUIFramework
+  [PASS] RUIF modVersion = v1.1.2
+== 9. 本地化占位符一致性与重复键（LOC-004 / LOC-005） ==
+  [PASS] RUIF.Components 占位符一致（比对 60 键）
+  [PASS] RUIF_Components.xml 无重复键
+  [PASS] RUIF_Components.xml 无重复键
+
+[GATE PASS] 发布门禁全项通过，可部署/发布。

@@ -38,6 +38,11 @@
       <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- TextAnchor（列对齐断言）位于 TextRenderingModule，不在 CoreModule 里 -->
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <PropertyGroup>
@@ -53,6 +58,7 @@
       <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\Assembly-CSharp-firstpass.dll" />
       <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.dll" />
       <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.CoreModule.dll" />
+      <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.TextRenderingModule.dll" />
       <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.IMGUIModule.dll" />
       <!-- VanillaUiSkin.ExportAssets 用到 Texture2D.EncodeToPNG（ImageConversion 扩展方法）⇒ 离线运行需该模块可加载 -->
       <EngineDll Include="$(RimWorldPath)\RimWorldWin64_Data\Managed\UnityEngine.ImageConversionModule.dll" />

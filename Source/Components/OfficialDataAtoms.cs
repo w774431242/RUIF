@@ -63,7 +63,10 @@ namespace RUIF
                 Rect pill = r.Take(64f);
                 Draw.Box(pill, Tokens.AccentSoft);
                 Draw.Border(pill, Tokens.Accent);
-                Draw.Label(pill, kinds[i] ?? string.Empty, Tokens.FontLabel, Tokens.Accent, TextAnchor.MiddleCenter);
+                // ⚠ 修复（2026-10-05 实机取证）：原字色与 pill 底/边框**同源**（AccentSoft 底 + Accent 字），
+                //   底色是 Accent 的 16% 叠印 ⇒ 字与底明度接近，实机看是「有底色、没文字」的空块。
+                //   改用 Tokens.Text 作字色，语义仍由底+边框承载；同时用 EllipsisLabel 防长文案撑破 64px。
+                Draw.EllipsisLabel(pill, kinds[i] ?? string.Empty, Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleCenter);
             }
         }
 

@@ -1,0 +1,3 @@
+PS=7.6.5
+dotnet=8.0.424
+bash-probe=

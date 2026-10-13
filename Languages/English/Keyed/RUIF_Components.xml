@@ -79,4 +79,14 @@
   <RUIF.Comp.Relative.Minutes>{0}m</RUIF.Comp.Relative.Minutes>
   <RUIF.Comp.Relative.Hours>{0}h</RUIF.Comp.Relative.Hours>
   <RUIF.Comp.Relative.Days>{0}d</RUIF.Comp.Relative.Days>
+
+  <!-- Interactive component family (1.3.0). Domain: Button = button family, Window = WindowFrame skeleton.
+       Discipline (plan §5.8): components carry NO built-in English default string, so every user-visible
+       text goes through the Keyed pipeline. Verified live call sites:
+         RUIF.Comp.Button.Disabled -> disabled-state HOVER TOOLTIP (ButtonAtoms.cs:267 / :300 / :338, InputAtoms.cs:557).
+           NOT a label==null fallback: ButtonAtoms draws "label ?? string.Empty" (an empty label stays empty).
+         RUIF.Comp.Window.Close   -> WindowFmt.DefaultCloseLabel(label) (WindowFrame.cs:223), the n==1
+           single-button default used when the caller passes label == null. -->
+  <RUIF.Comp.Button.Disabled>Unavailable</RUIF.Comp.Button.Disabled>
+  <RUIF.Comp.Window.Close>Close</RUIF.Comp.Window.Close>
 </LanguageData>

@@ -40,6 +40,24 @@ namespace RUIF
     }
 
     /// <summary>
+    /// 统计表**单列样式**：水平锚点 + 是否降调前景。
+    ///
+    /// <para>为值类型 / 无状态 —— 列样式表由调用方持有并复用（静态 readonly，绘制期零分配），
+    /// 组件自身不记忆任何列状态（GATE-UI）。</para>
+    /// <para>⚠ <see cref="Align"/> 只取**水平分量**（行内一律垂直居中）；零初始化的
+    /// <c>default(StatCol)</c>（= <c>TextAnchor.UpperLeft</c>）会被归一化为左对齐，
+    /// 见 <see cref="TableFmt.ColumnAlignOf"/>。</para>
+    /// </summary>
+    public struct StatCol
+    {
+        /// <summary>该列锚点（表头与数据格共用）。</summary>
+        public TextAnchor Align;
+
+        /// <summary>该列是否用降调前景（<see cref="Tokens.Dim"/>）—— 用于 `#` / 占比 / 参与季数这类次要列。</summary>
+        public bool Dim;
+    }
+
+    /// <summary>
     /// 数据展示组件（S3-2，C1 中的纯 ✅ 件）：人物卡 / 技能条组 / 需求面板 / 特性芯片 /
     /// 健康行 / 热力日历 / 排行榜 / 统计表 / 时间轴。
     /// 无状态；数据全部由调用方传入。
@@ -69,7 +87,9 @@ namespace RUIF
                 Rect pill = new Rect(rect.xMax - 6f - sw, rect.y + 6f, sw, 16f);
                 Draw.Box(pill, Draw.WithAlpha(Tokens.Alive, 0.18f));
                 Draw.Border(pill, Tokens.Alive);
-                Draw.Label(pill, status, Tokens.FontLabel, Tokens.Alive, TextAnchor.MiddleCenter);
+                // 字色不用 Tokens.Alive：底色是 Alive 的 18% 叠印 ⇒ 同色系叠同色系时状态字发虚。
+                // 语义由底色 + 边框承载，字用 Text 保证可读（与 HistoryFeed 的 pill 同一处理）。
+                Draw.EllipsisLabel(pill, status, Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleCenter);
             }
             Draw.Label(col.Take(14f), title ?? string.Empty, Tokens.FontLabel, Tokens.Muted, TextAnchor.MiddleLeft);
             var bars = Layout.Row(col.Rest, 4f);
@@ -136,7 +156,9 @@ namespace RUIF
                 Color c = positive[i] ? Tokens.Alive : Tokens.Dead;
                 Draw.Box(chip, Draw.WithAlpha(c, 0.16f));
                 Draw.Border(chip, c);
-                Draw.Label(chip, traits[i] ?? string.Empty, Tokens.FontLabel, c, TextAnchor.MiddleCenter);
+                // 同 GeneChips：16% 语义底 + 100% 同色字 ⇒ 负向特性（Dead 红）在实机上读不清。
+                // 正向/负向仍由底色与边框区分，字统一用 Text。
+                Draw.Label(chip, traits[i] ?? string.Empty, Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleCenter);
             }
         }
 
@@ -185,15 +207,54 @@ namespace RUIF
             {
                 var row = Layout.Row(col.Take(rowH - 2f), 6f);
                 Draw.Label(row.Take(22f), DataFmt.RankMedal(i), Tokens.FontLabel, Tokens.Accent, TextAnchor.MiddleCenter);
-                Draw.Label(row.Take(72f), names[i] ?? string.Empty, Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleLeft);
+                // 名字列固定 72px：中文名「蓝 雪牛」约 36px 放得下，但拉丁/带称号的榜单条目
+                // （如「Blue Snow Cow」）会被 Draw.Label 硬裁成半截字 —— 改省略号，末位可见。
+                Draw.EllipsisLabel(row.Take(72f), names[i] ?? string.Empty, Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleLeft);
                 Rect bar = row.Rest;
                 Bar(bar, DataFmt.Bar01(values[i], maxValue), i < 3 ? Tokens.Accent : Tokens.Info);
                 Draw.Label(bar, values[i].ToString("0"), Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleRight);
             }
         }
 
-        /// <summary>统计表（表头 + 斑马纹行 + 比例列宽）。</summary>
+        /// <summary>
+        /// 统计表（表头 + 斑马纹行 + 比例列宽）—— **v1.1.2 兼容重载**（5 参）。
+        ///
+        /// <para><b>为什么必须是独立方法（而不是把后续参数写成可选）</b>：C# 可选参数只是**编译期**
+        /// 特性 —— 调用点会把默认值展开成**全部实参**写进 IL。若只保留 10 参版本，1.1.2 编译的
+        /// 消费者（含工坊外部 Mod）升级到 1.2.0 后，其 IL 仍按 5 参签名查找 ⇒
+        /// <c>MissingMethodException</c>。故本 5 参签名**作为真正的方法保留**，委托到 10 参实现
+        /// （单一实现体，见下）。</para>
+        ///
+        /// <para>语义与 v1.1.2 逐字一致：全列 <see cref="TextAnchor.MiddleLeft"/> +
+        /// <see cref="Tokens.Muted"/> / <see cref="Tokens.Text"/>，无逐列样式、无阈值带色。</para>
+        /// </summary>
         public static void StatTable(Rect rect, string[] headers, string[][] rows, float[] shares, float rowH = 20f)
+            => StatTable(rect, headers, rows, shares, rowH, null, -1, 0f, null, null);
+
+        /// <summary>
+        /// 统计表（表头 + 斑马纹行 + 比例列宽），可选**逐列样式**与**阈值带色列**。
+        ///
+        /// <para>⚠ <b>本重载所有参数均无默认值</b>（关键）：若此处带默认值，4 / 5 实参调用会与上面的
+        /// 5 参重载产生 <c>CS0121</c> 重载歧义。唯一性自检 —— 4 实参 → 只匹配 5 参重载；
+        /// 5 实参 → 5 参重载无需填默认、本重载要再填 5 个 ⇒ 选 5 参重载；10 实参 → 只匹配本重载。</para>
+        ///
+        /// <para><b>列样式</b>（<paramref name="cols"/>）：表头单元格与数据格**共用同列锚点**
+        /// （预览数值列表头亦右对齐）；<see cref="StatCol.Dim"/> 的列数据格走
+        /// <see cref="Tokens.Dim"/>（表头色不变）。越界列回退 <see cref="TextAnchor.MiddleLeft"/>。</para>
+        ///
+        /// <para><b>阈值带色列</b>（<paramref name="bandCol"/> ≥ 0）：该列每格走
+        /// <see cref="TableAtoms.ValueCell(Rect,string,float,float)"/> ⇒ 底色 =
+        /// <see cref="TableFmt.BandColor"/> 的 22% 叠加、右对齐带色字，文本优先
+        /// <paramref name="bandTexts"/>、缺失回退 <c>"0.#"</c>。带色格**收成行内药丸**
+        /// （高 = <see cref="Measure.RowHeight(GameFont)"/> 的标签档、垂直居中），与预览 `.val{padding:1px 4px}`
+        /// 的紧凑色块一致 —— 不做满行高色块。</para>
+        ///
+        /// <para>契约不变：不读 <c>Mouse</c>/<c>Event</c>；**行越出 rect 底边即 break** ⇒ 调用方按
+        /// <c>(1 + rows) * rowH</c> 预留；列宽按 <paramref name="shares"/> 比例切分
+        /// （<see cref="TableFmt.ColumnSplit"/>，sum 不必为 1，末列吃掉余宽）。</para>
+        /// </summary>
+        public static void StatTable(Rect rect, string[] headers, string[][] rows, float[] shares, float rowH,
+            StatCol[] cols, int bandCol, float bandRef, float[] bandValues, string[] bandTexts)
         {
             if (headers == null) return;
             float[] widths = new float[headers.Length];
@@ -205,10 +266,14 @@ namespace RUIF
             for (int i = 0; i < headers.Length; i++)
             {
                 Draw.Label(new Rect(hx, rect.y, widths[i], rowH), headers[i] ?? string.Empty,
-                    Tokens.FontLabel, Tokens.Muted, TextAnchor.MiddleLeft);
+                    Tokens.FontLabel, Tokens.Muted, TableFmt.ColumnAlignOf(cols, i));
                 hx += widths[i];
             }
             Draw.LineH(rect.x, rect.y + rowH, rect.width, Tokens.BorderSoft);
+
+            // 带色格的药丸高度（行内垂直居中）：取标签行高，且不得超过行高。
+            float bandH = Mathf.Min(rowH, Measure.RowHeight(Tokens.FontLabel));
+            float bandTop = (rowH - bandH) * 0.5f;
 
             int n = rows?.Length ?? 0;
             for (int r = 0; r < n; r++)
@@ -219,8 +284,18 @@ namespace RUIF
                 float x = rect.x;
                 for (int c = 0; c < headers.Length; c++)
                 {
+                    if (TableFmt.IsBandCol(bandCol, c))
+                    {
+                        float value = bandValues != null && r < bandValues.Length ? bandValues[r] : 0f;
+                        TableAtoms.ValueCell(new Rect(x, y + bandTop, widths[c], bandH),
+                            TableFmt.BandTextOf(bandValues, bandTexts, r), value, bandRef);
+                        x += widths[c];
+                        continue;
+                    }
                     string text = rows[r] != null && c < rows[r].Length ? rows[r][c] : string.Empty;
-                    Draw.Label(new Rect(x, y, widths[c], rowH), text, Tokens.FontLabel, Tokens.Text, TextAnchor.MiddleLeft);
+                    Draw.Label(new Rect(x, y, widths[c], rowH), text, Tokens.FontLabel,
+                        TableFmt.IsDimColumn(cols, c) ? Tokens.Dim : Tokens.Text,
+                        TableFmt.ColumnAlignOf(cols, c));
                     x += widths[c];
                 }
             }

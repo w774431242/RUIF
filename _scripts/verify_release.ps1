@@ -50,9 +50,21 @@ if ($asm) {
 }
 if (-not $dllVersion) { Fail '无法从 dll 读出 RUIF.Api.VersionString' } else { Pass "dll 版本 = $dllVersion" }
 
+# 程序集版本必须同样被声明且与 Api.VersionString 一致。
+# 背景（2026-09-12）：GenerateAssemblyInfo=false 时若不手写 [AssemblyVersion]，
+# Assembly.GetName().Version 恒为 0.0.0.0 —— 只有 Api.VersionString 有值，外部工具/反射看到的是 0。
+$asmVer = $asm.GetName().Version
+if (-not $asmVer -or $asmVer.Major -eq 0) {
+    Fail "程序集版本未声明（= $asmVer）—— 请在 Source/Core/AssemblyInfo.cs 加 [assembly: AssemblyVersion(...)]"
+} elseif ($asmVer.ToString(3) -ne $dllVersion) {
+    Fail "程序集版本 $asmVer 与 Api.VersionString $dllVersion 不一致"
+} else {
+    Pass "程序集版本 = $asmVer（与 Api.VersionString 一致）"
+}
+
 function Get-AboutVersion([string]$path) {
     if (-not (Test-Path $path)) { return $null }
-    [xml]$x = Get-Content $path -Raw
+    [xml]$x = Get-Content $path -Raw -Encoding UTF8
     return ($x.ModMetaData.modVersion -replace '^v', '')
 }
 $aboutRuif = Get-AboutVersion (Join-Path $ruifRoot 'About\About.xml')
@@ -88,7 +100,7 @@ function Get-KeySet([string]$dir) {
     $set = New-Object 'Collections.Generic.HashSet[string]'
     if (-not (Test-Path $dir)) { return $set }
     foreach ($f in Get-ChildItem $dir -Recurse -Filter *.xml -File) {
-        [xml]$x = Get-Content $f.FullName -Raw
+        [xml]$x = Get-Content $f.FullName -Raw -Encoding UTF8
         foreach ($n in $x.SelectNodes('//*[not(*)]')) {
             if ($n.Name -ne '#comment') { [void]$set.Add($n.Name) }
         }
@@ -239,7 +251,7 @@ foreach ($sub in @('About', 'Languages', 'Patches')) {
 }
 $badXml = @()
 foreach ($f in $xmlFiles) {
-    try { [void][xml](Get-Content $f.FullName -Raw) }
+    try { [void][xml](Get-Content $f.FullName -Raw -Encoding UTF8) }
     catch { $badXml += ($f.Name + ' :: ' + $_.Exception.Message) }
 }
 if ($badXml.Count -eq 0) { Pass "XML 全部良构（$($xmlFiles.Count) 个文件）" }
@@ -248,7 +260,7 @@ else { foreach ($b in $badXml) { Fail "XML 解析失败: $b" } }
 # About.xml 必备字段（缺 packageId / modVersion 会让 Mod 列表出错或显示异常）
 $aboutPath = Join-Path $ruifRoot 'About\About.xml'
 if (-not (Test-Path $aboutPath)) { Fail 'RUIF 缺 About.xml' } else {
-    [xml]$x = Get-Content $aboutPath -Raw
+    [xml]$x = Get-Content $aboutPath -Raw -Encoding UTF8
     $pkgId = $x.ModMetaData.packageId      # 注意：不能用 $pid —— PowerShell 只读自动变量
     $ver = $x.ModMetaData.modVersion
     if ([string]::IsNullOrEmpty($pkgId)) { Fail 'RUIF About.xml 缺 packageId' } else { Pass "RUIF packageId = $pkgId" }
@@ -259,7 +271,7 @@ if (-not (Test-Path $aboutPath)) { Fail 'RUIF 缺 About.xml' } else {
 Head '9. 本地化占位符一致性与重复键（LOC-004 / LOC-005）'
 function Get-KeyedNodes([string]$file) {
     if (-not (Test-Path $file)) { return @() }
-    [xml]$x = Get-Content $file -Raw
+    [xml]$x = Get-Content $file -Raw -Encoding UTF8
     return @($x.SelectNodes('//LanguageData/*'))
 }
 function Get-PlaceholderKey($text) {

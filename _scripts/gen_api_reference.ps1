@@ -22,7 +22,13 @@ $ErrorActionPreference = 'Stop'
 $ruifRoot = Split-Path -Parent $PSScriptRoot
 $dll = Join-Path $ruifRoot 'Assemblies\RUIF.dll'
 if (-not (Test-Path $dll)) { throw "RUIF.dll not found - build first: $dll" }
-if (-not $OutFile) { $OutFile = Join-Path $ruifRoot 'docs\API参考.md' }
+if (-not $OutFile) {
+    # docs/ 允许分层（2026-09-12 起按 01…07 分子目录）⇒ 先按文件名递归找现有参考，
+    # 找到就**原位重写**（不产生第二份），找不到才回落到扁平路径。
+    $found = @(Get-ChildItem (Join-Path $ruifRoot 'docs') -Recurse -File -Filter 'API参考.md' -ErrorAction SilentlyContinue |
+               Sort-Object FullName | Select-Object -First 1)
+    $OutFile = if ($found.Count -gt 0) { $found[0].FullName } else { Join-Path $ruifRoot 'docs\API参考.md' }
+}
 
 # ---------- 1) 预加载引擎程序集（顺序敏感：先底层模块） ----------
 $managed = Join-Path $RimWorldPath 'RimWorldWin64_Data\Managed'

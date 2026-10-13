@@ -1,0 +1,25 @@
+﻿== 用 -SimpleMatch 字面量精确检查（修正上一轮的转义错误）==
+REAL  has '[System.Obsolete('  = False
+COPY  has '[System.Obsolete('  = True
+REAL  has '__CallSiteProbe'    = False
+COPY  has '__CallSiteProbe'    = False
+COPY  has '__CALLSITE_PROBE__' = True
+
+== git：真实 Source/Core/Tr.cs 是否被改 ==
+git diff --name-only -- Source/Core/Tr.cs => []
+git status --porcelain -- Source/Core/Tr.cs => []
+
+== 真实 dll 与副本 dll ==
+real  MD5 = 36EFB5809FEB1AAFC6FBF1619076FF8C
+copy  MD5 = 1D2087C56DC0CE5F794B4C3BB04475B6
+copy Tr.cs 第 59-68 行:
+        /// <summary>
+        /// 三个参数 —— 同样直接走引擎。当前唯一使用点是设置页的「XML 配置来源」行
+        /// （该行同时受语言与配置影响，缓存收益极小；保留此重载是为了<b>所有翻译统一经 <see cref="Tr"/></b>
+        /// 这一纪律，便于门禁扫描与后续统一改造）。
+        /// </summary>
+        [System.Obsolete("__CALLSITE_PROBE__ four-parameter overload must have zero call sites", true)]
+        internal static string Get(string key, NamedArgument arg1, NamedArgument arg2, NamedArgument arg3)
+        {
+            return key.Translate(arg1, arg2, arg3).ToString();
+        }

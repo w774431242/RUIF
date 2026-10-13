@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>RUIF · 组件验证台（开发用）</name>
+  <author>Personal Chronicle Team</author>
+  <packageId>PersonalChronicle.RUIF.DemoBench</packageId>
+  <modVersion>v0.1.0</modVersion>
+  <supportedVersions>
+    <li>1.6</li>
+  </supportedVersions>
+  <description>RUIF 组件验证台（Dev Bench）
+开发期验证工具，不随 RUIF 框架分包，不发布。
+
+用途：在游戏内实机查看 RUIF 原子组件的真实手感与像素表现。22 个页签覆盖：
+8 个组件分类（原子/输入/数据/图表/反馈/导航/工业与官方/桥接）+ 3 个原版控件桥接面
+（拖拽重排 / 脉冲高亮 / 殖民者表，需非滚动坐标）+ 互动组件族 + 6 个 L2 补全面
+（视觉扩展/导航版式/数据族/输入族/官方/反馈族）+ 3 个工具面（诊断/贴图管线/组件画廊）
++ 1 个覆盖补全面。
+
+覆盖口径（2026-10-05 审计）：框架侧 173 件公开绘制方法（*Atoms / Shapes / Charts /
+Industrial / WindowFrame / CommandPalette / PawnTableHost）逐件可验证，缺口已归零。
+页签栏按可用宽度自动折行（1–3 行），不再被窗口右边界裁切。
+
+入口①：进游戏后 —— 底栏「组件验证台」按钮，或按 F10（二者都由 UIRoot_Play 提供；
+F10 是原版未占用键，原 F9 与「历史」主标签撞键）。
+入口②：任意时刻含标题界面 —— 选项 → Mod 设置 → 「RUIF 组件验证台」→ 打开按钮。
+（底栏与 F10 不出现在标题界面：那里是 Verse.UIRoot_Entry，不绘制 MainButtonsRoot，属原版结构。）
+
+RUIF Component Verification Bench (dev-only, not shipped)
+- In-game verification surface for RUIF atoms added in the second assembly-forensics pass.
+
+RUIF · RimWorld UI Framework</description>
+  <modDependencies>
+    <li>
+      <packageId>PersonalChronicle.RUIFramework</packageId>
+      <displayName>RUI Framework</displayName>
+    </li>
+  </modDependencies>
+  <loadAfter>
+    <li>PersonalChronicle.RUIFramework</li>
+  </loadAfter>
+</ModMetaData>

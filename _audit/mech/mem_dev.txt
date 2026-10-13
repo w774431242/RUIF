@@ -1,0 +1,561 @@
+public IReadOnlyList<string> Entries { get; }
+public List<TreeNode> Children
+public RimWorld.PawnTable Ensure(string tableDefName, Func<IEnumerable<Pawn>> pawnsGetter, float w, float h)
+public RimWorld.PawnTable Table { get; }
+public System.Action Run
+public System.IAsyncResult BeginInvoke(int index, UnityEngine.Rect row, bool dragging, System.AsyncCallback callback, object object)
+public TreeNode Add(TreeNode child)
+public UnityEngine.Color tone
+public UnityEngine.Rect Next()
+public UnityEngine.Rect Rest { get; }
+public UnityEngine.Rect Rest { get; }
+public UnityEngine.Rect Take(float height)
+public UnityEngine.Rect Take(float width)
+public bool CanBack { get; }
+public bool CanForward { get; }
+public bool CreateFailed { get; }
+public bool Dead
+public bool Expanded
+public bool hasChildren
+public bool isTotal
+public bool paused
+public bool priority
+public const float BlockGap = 12f
+public const float CardGap = 8f
+public const float CardPadX = 12f
+public const float CardPadY = 8f
+public const float FontBodyLineHeight = 22f
+public const float Gap = 12f
+public const float GridGap = 8f
+public const float HeaderHeight = 56f
+public const float PanelPadding = 12f
+public const float ProgressbarH = 12f
+public const float RuleHeight = 1f
+public const float ScrollbarThickness = 18f
+public const float SectionTitleHeight = 30f
+public const float SidebarWidth = 208f
+public const float SpaceLg = 24f
+public const float SpaceMd = 16f
+public const float SpaceSm = 12f
+public const float SpaceXs = 8f
+public const float SpaceXxs = 4f
+public const float TreeOpW = 18f
+public const int MaxEntries = 128
+public const int StackLimit = 32
+public const string Separator = "›"
+public const string VersionString = "1.1.2"
+public float AgeSec
+public float X { get; }
+public float Y { get; }
+public float close
+public float delta
+public float end
+public float hi
+public float high
+public float lo
+public float low
+public float max
+public float max
+public float median
+public float min
+public float min
+public float open
+public float progress
+public float q1
+public float q3
+public float r
+public float start
+public float value
+public float value
+public float x
+public float x
+public float y
+public float[] series
+public int Depth { get; }
+public int Index { get; }
+public int Position { get; }
+public int count
+public int depth
+public int done
+public int from
+public int kind
+public int series
+public int series
+public int severity
+public int side
+public int target
+public int to
+public object Payload
+public readonly Nullable<Color> Color
+public readonly Nullable<GameFont> Font
+public readonly string Text
+public static AnchorScope Anchor(UnityEngine.TextAnchor anchor)
+public static ColorScope Color(UnityEngine.Color c)
+public static Command Draw(UnityEngine.Rect rect, Command[] commands, ref string query, ref int sel, Command[] filtered, int[] scores)
+public static EnabledScope Enabled(bool value)
+public static FontScope Font(Verse.GameFont font)
+public static Grid Grid(UnityEngine.Rect outer, int cols, float cellHeight, float gap = 0)
+public static HStack Row(UnityEngine.Rect outer, float gap = 0)
+public static IEnumerable<Pawn> CurrentMapColonists()
+public static InputState Resolve(bool hovered, bool pressed, bool selected, bool enabled)
+public static NavAction NavBackBar(UnityEngine.Rect rect, NavStack stack, string currentLabel)
+public static RelationBand RelationBandOf(float g)
+public static RotateScope Rotate(float angle, UnityEngine.Vector2 pivot)
+public static SortState NextSort(SortState s)
+public static System.Version Version { get; }
+public static TimeBucket TimeBucketOf(float ageSec)
+public static TreeNode CollapsibleTree(UnityEngine.Rect rect, TreeNode root)
+public static UnityEngine.Color AccentSoft { get; }
+public static UnityEngine.Color AlertSeverityTone(int level)
+public static UnityEngine.Color AreaRowTone(bool selected)
+public static UnityEngine.Color BandColor(float ratio01)
+public static UnityEngine.Color BandColor(float ratio01)
+public static UnityEngine.Color CellTone(float norm01)
+public static UnityEngine.Color CheckColor(bool ok)
+public static UnityEngine.Color CountTone(int count)
+public static UnityEngine.Color FloatMenuRowTone(bool hover)
+public static UnityEngine.Color Heat(float t01)
+public static UnityEngine.Color HeatColor(float t)
+public static UnityEngine.Color HsvColor(float h, float s, float v, float alpha = 1)
+public static UnityEngine.Color KeybindSlotTone(bool listening)
+public static UnityEngine.Color LedColor(int status)
+public static UnityEngine.Color MainTabTone(bool active)
+public static UnityEngine.Color NodeKindColor(int kind)
+public static UnityEngine.Color PolicyRowTone(bool selected)
+public static UnityEngine.Color ProgressTone(float p01)
+public static UnityEngine.Color Ramp(UnityEngine.Color lo, UnityEngine.Color hi, float t)
+public static UnityEngine.Color RelationColor(float g)
+public static UnityEngine.Color RelationTone(float g)
+public static UnityEngine.Color Series(int index)
+public static UnityEngine.Color SeriesColor(int i)
+public static UnityEngine.Color SkillColor(float level)
+public static UnityEngine.Color StateColor(MachineState s)
+public static UnityEngine.Color TradeTone(int delta)
+public static UnityEngine.Color TrainingTone(int level)
+public static UnityEngine.Color WeatherTone(int kind)
+public static UnityEngine.Color WithAlpha(UnityEngine.Color c, float alpha)
+public static UnityEngine.Color WizardConnectorTone(int i, int step)
+public static UnityEngine.Color WizardNumberTone(int i, int step)
+public static UnityEngine.Color WizardStepTone(int i, int step)
+public static UnityEngine.Color ZoneColor(int zone)
+public static UnityEngine.Color32 Blend(UnityEngine.Color32 dst, UnityEngine.Color src, float coverage01)
+public static UnityEngine.Color32[] AlphaFade(int w, UnityEngine.Color rgb, float from = 1, float to = 0)
+public static UnityEngine.Color32[] HGradient(int w, UnityEngine.Color left, UnityEngine.Color right)
+public static UnityEngine.Color32[] Solid(int w, int h, UnityEngine.Color fill)
+public static UnityEngine.Color32[] VGradient(int h, UnityEngine.Color top, UnityEngine.Color bottom)
+public static UnityEngine.Rect Anchor(UnityEngine.Rect parent, Anchor9 a, UnityEngine.Vector2 size, float margin = 0)
+public static UnityEngine.Rect AspectBox(UnityEngine.Rect outer, float ratio)
+public static UnityEngine.Rect BeginScroll(UnityEngine.Rect outer, float contentHeight, ref UnityEngine.Vector2 scroll, bool showScrollbars = true)
+public static UnityEngine.Rect BubbleTail(UnityEngine.Rect bubble, float size)
+public static UnityEngine.Rect DotRect(UnityEngine.Rect rect)
+public static UnityEngine.Rect EyeRect(UnityEngine.Rect host, float size)
+public static UnityEngine.Rect HLine(float x, float y, float length)
+public static UnityEngine.Rect Inset(UnityEngine.Rect outer, float padX, float padY)
+public static UnityEngine.Rect LedCell(UnityEngine.Rect r, int i, int cols, int rows)
+public static UnityEngine.Rect NodeRect(UnityEngine.Rect canvas, int col, int row, float nodeW, float nodeH, float gap)
+public static UnityEngine.Rect PinRect(UnityEngine.Rect host, float size, float margin)
+public static UnityEngine.Rect RowRect(UnityEngine.Rect list, int index, float rowH, float gap = 0)
+public static UnityEngine.Rect SectionFrame(UnityEngine.Rect outer, string title)
+public static UnityEngine.Rect SegmentRect(UnityEngine.Rect rect, int count, int index)
+public static UnityEngine.Rect Snap(UnityEngine.Rect r)
+public static UnityEngine.Rect TreeRow(UnityEngine.Rect list, int index, float rowH, int depth, float indent = 14)
+public static UnityEngine.Rect VLine(float x, float y, float length)
+public static UnityEngine.Texture2D Publish(long key, int w, int h, UnityEngine.Color32[] pixels, string name = null)
+public static UnityEngine.Vector2 Floor(UnityEngine.Vector2 v)
+public static UnityEngine.Vector2 LinkMid(UnityEngine.Vector2 from, UnityEngine.Vector2 to)
+public static VStack Column(UnityEngine.Rect outer, float gap = 0)
+public static Verse.GameFont FontBody { get; }
+public static Verse.GameFont FontLabel { get; }
+public static Verse.GameFont FontValue { get; }
+public static bool AlertBanner(UnityEngine.Rect rect, AlertPriority level, string msg, string actionLabel = null)
+public static bool BatchConfirm(UnityEngine.Rect rect, string title, string summary, string cancelLabel = null, string okLabel = null)
+public static bool Canvas(UnityEngine.Rect rect, long key, int w, int h, UnityEngine.Color32[] pixels, string name = null)
+public static bool ColorPicker(UnityEngine.Rect rect, ref UnityEngine.Color color, ref float h, ref float s, ref float v)
+public static bool ConfirmDialog(UnityEngine.Rect rect, string title, string msg, bool danger, string cancelLabel = null, string okLabel = null)
+public static bool CriticalOverlay(UnityEngine.Rect rect, string msg, string actionLabel)
+public static bool CycleButton(UnityEngine.Rect rect, string label, string[] values, ref int index)
+public static bool DebounceReady(float now, float lastInputTime, float delay)
+public static bool DensitySwitch(UnityEngine.Rect rect, ref RowDensity density)
+public static bool DoubleSlider(UnityEngine.Rect rect, ref float lo, ref float hi, float min, float max, float roundTo = -1)
+public static bool EditableLabel(UnityEngine.Rect rect, ref string text, ref bool editing, ref string buffer)
+public static bool EmptyState(UnityEngine.Rect rect, string title, string sub, string cta = null)
+public static bool EyeToggle(UnityEngine.Rect rect, bool visible, Nullable<Color> color = null)
+public static bool FilterRow(UnityEngine.Rect rect, string[] colLabels, string[] filters)
+public static bool Fits(string text, float width, Verse.GameFont font)
+public static bool FocusSearch(UnityEngine.Rect rect, ref string query)
+public static bool GripHandle(UnityEngine.Rect rect, int rows = 3, int cols = 2, Nullable<Color> color = null)
+public static bool GripHit(UnityEngine.Rect row)
+public static bool HasConflict(string[] keys)
+public static bool HeaderCell(UnityEngine.Rect rect, string label, SortState state)
+public static bool HotkeyBind(UnityEngine.Rect rect, string label, string currentKey)
+public static bool InPlaceDropdown(UnityEngine.Rect rect, string label, string[] options, int currentIndex, Action<int> onPicked)
+public static bool InlineError(UnityEngine.Rect rect, string msg, string fixLabel = null)
+public static bool IsAvailable(string minVersion = null)
+public static bool IsMax(float v, float max)
+public static bool IsValidPath(string p)
+public static bool KeyConflictHint(UnityEngine.Rect rect, string[] boundKeys)
+public static bool List(UnityEngine.Rect area, int count, float rowHeight, ref int groupId, ReorderRowDrawer draw, Action<int, int> onReorder = null, bool highlightDragged = true)
+public static bool MultiLineEditor(UnityEngine.Rect rect, ref string text, ref string buffer, int maxLines = 4)
+public static bool MultiSelectList(UnityEngine.Rect rect, string[] items, bool[] selected, ref int anchor, float rowH)
+public static bool NodeGraph(UnityEngine.Rect canvas, string[] labels, int[] colOf, int[] rowOf, int[] from, int[] to, int[] state, ref int selected, float nodeW = 96, float nodeH = 30, float gap = 14)
+public static bool NotificationEntry(UnityEngine.Rect rect, string text, string time, bool unread)
+public static bool NumericField(UnityEngine.Rect rect, ref float value, float min, float max, ref string buffer)
+public static bool PaintStrokeGrid(UnityEngine.Rect rect, int rows, int cols, int[] values, out int hitIndex)
+public static bool PathField(UnityEngine.Rect rect, ref string path)
+public static bool PawnTableFrame(UnityEngine.Rect rect, PawnTableHost host, string tableDefName, Func<IEnumerable<Pawn>> pawnsGetter = null, bool showStatusLine = true)
+public static bool PointsOverdrawn(int budget, int spent)
+public static bool PriorityGrid(UnityEngine.Rect rect, string[] rowLabels, string[] colLabels, int[] values, out int hitIndex)
+public static bool ProfilePreset(UnityEngine.Rect rect, string[] names, ref int index, out bool save)
+public static bool QueueEditor(UnityEngine.Rect rect, int[] queue, ref int count, string[] labels, float rowH)
+public static bool QuickAmounts(UnityEngine.Rect rect, string label, ref float value, float max)
+public static bool RemoveAtInt(int[] queue, ref int count, int index)
+public static bool ResizeHandle(UnityEngine.Rect area, float x)
+public static bool SearchField(UnityEngine.Rect rect, ref string query, ref string buffer, string placeholder, ref float lastInputTime, float delay = 0.2)
+public static bool Segmented(UnityEngine.Rect rect, string[] options, ref int index)
+public static bool SliderTicks(UnityEngine.Rect rect, ref float value, float[] ticks, float min, float max)
+public static bool SliderWithValue(UnityEngine.Rect rect, ref float value, float min, float max, float roundTo = -1, Func<float, string> format = null)
+public static bool Stepper(UnityEngine.Rect rect, ref int value, int min, int max, int step = 1)
+public static bool TagPicker(UnityEngine.Rect rect, string[] all, bool[] picked, float gap = 6)
+public static bool TimetableMatrix(UnityEngine.Rect rect, string[] rowLabels, int[] states, out int hitIndex)
+public static bool ToggleAt(bool[] sel, int i)
+public static bool ToggleSwitch(UnityEngine.Rect rect, ref bool on)
+public static bool ToolbarIcon(UnityEngine.Rect rect, string glyph, bool active = false)
+public static bool TryGet(long key, out UnityEngine.Texture2D tex)
+public static bool TryParseClamp(string s, float min, float max, out float value)
+public static bool UndoToast(UnityEngine.Rect rect, string action, float alpha)
+public static bool WheelAdjust(UnityEngine.Rect rect, ref float value, float step, float min, float max, bool invert = false)
+public static bool WillChange(int fromIndex, int insertIndex)
+public static bool ZoomIndicator(UnityEngine.Rect rect, float zoom, float resetValue = 1)
+public static float Approach(float current, float target, float smooth)
+public static float Bar01(float value, float max)
+public static float BillRatio(float done, float target)
+public static float BillRatio(int done, int target)
+public static float BlinkAlpha(float t, AlertPriority p)
+public static float CapacityRatio(float used, float capacity)
+public static float CaretAngle(float progress01)
+public static float Ceil(float coord)
+public static float ControlHeight(Verse.GameFont font)
+public static float Coverage(float d, float rx = 1, float ry = 1)
+public static float FadeAlpha(int i, int n)
+public static float FlashAlpha(float t, float minAlpha = 0.45)
+public static float Floor(float coord)
+public static float FrozenContentOffsetX(float scrollX)
+public static float GaugeNeedleDeg(float v01)
+public static float GaugeNorm(float v, float lo, float hi)
+public static float GradientAlpha(int i, int n)
+public static float LerpT(int i, int n)
+public static float Max(float[] v)
+public static float Min(float[] v)
+public static float NetBalance(float produced, float consumed)
+public static float OverflowRatio(float used, float capacity)
+public static float PulseAlpha(float t, float minAlpha = 0.45)
+public static float QuickAmount(float current, QuickAmountKind kind, float max)
+public static float Ratio(float done, float total)
+public static float ResizeWidth(float startWidth, float dx, float min, float max)
+public static float RichTextLine(UnityEngine.Rect rect, RichSpan[] spans, UnityEngine.TextAnchor anchor = MiddleLeft, Verse.GameFont defaultFont = Small)
+public static float RowHeight(RowDensity d)
+public static float RowHeight(Verse.GameFont font)
+public static float RowHeight(Verse.GameFont left, Verse.GameFont right)
+public static float Scale(float v, float lo, float hi, float outLo, float outHi)
+public static float ScrollThumbHeight(float trackH, float viewH, float contentH)
+public static float ScrollThumbY(float trackY, float trackH, float thumbH, float scroll01)
+public static float ScrubValue(float startValue, float dx, float step, float min, float max)
+public static float SegmentsTotal(float[] durations)
+public static float SeriesMax(float[] values, float fallback = 1)
+public static float Share(float value, float total)
+public static float Slider01(float value, float min, float max)
+public static float SliderValue(float t, float min, float max, float roundTo)
+public static float SliderValueFromPos(float mouseX, UnityEngine.Rect track, float min, float max)
+public static float SnapToTicks(float value, float[] ticks)
+public static float Span(float a, float b)
+public static float Sum(float[] values)
+public static float SweepDeg(float value, float total)
+public static float TabWidth(string label, float unitWidth, float padPerTab)
+public static float ToastAlpha(float age, float ttl, float fade = 0.5)
+public static float TrailAlpha(int i, int head, int segments)
+public static float ValueRatio(float value, float reference)
+public static float WealthTotal(float[] parts)
+public static float WheelStep(float value, float deltaY, float step, float min, float max)
+public static float Width(string text, Verse.GameFont font)
+public static float WipeWidth(float progress01, float width, int row, int rows, float slant = 0.35)
+public static int BottleneckIndex(float[] stageTimes)
+public static int ClampPage(int page, int totalPages)
+public static int CompareWinner(float a, float b)
+public static int ConflictCount(string[] keys)
+public static int CountNodes(TreeNode node)
+public static int DockHost(UnityEngine.Rect area, string title, ref bool collapsed, float edge = 24)
+public static int DockZone(UnityEngine.Rect screen, float edge, UnityEngine.Vector2 pointer)
+public static int DropIndex(UnityEngine.Rect list, int count, float rowH, float pointerY)
+public static int EnqueueInt(int[] queue, ref int count, int value)
+public static int Filter(string query, Command[] source, Command[] dest, int[] scores)
+public static int FloatMenu(UnityEngine.Rect rect, string[] labels, ref int hover)
+public static int FuzzyScore(string query, string target)
+public static int GaugeZone(float v01, float warn01, float dead01)
+public static int HeatLevel(float ratio01, int levels = 4)
+public static int HighlightSegmentCount(string text, string query)
+public static int HistogramBin(float v, float lo, float hi, int bins)
+public static int Index(int x, int y, int w)
+public static int JumpList(UnityEngine.Rect rect, RecentEntry[] recent, int max = 8)
+public static int LabelUnits(string label)
+public static int LandingIndex(int fromIndex, int insertIndex)
+public static int MergeHidden(int total, int visibleMax)
+public static int MergeRunLengths(int[] states, int[] outBuf)
+public static int MergeVisible(int total, int visibleMax)
+public static int NextIndex(int i, int n)
+public static int NextPriority(int v)
+public static int NextTimetableState(int s)
+public static int NiceTicks(float lo, float hi, float[] outBuf, int target = 4)
+public static int PointsRemaining(int budget, int spent)
+public static int PresetIndex(string[] names, string name)
+public static int RingFilledSegments(int segments, float progress01)
+public static int RingSegments(float sweepDeg, float perSegDeg = 3)
+public static int SegmentIndex(UnityEngine.Rect rect, int count, float x)
+public static int Shares(float[] values, float[] outBuf)
+public static int SpinnerHead(int segments, float t)
+public static int StepValue(int value, int delta, int min, int max)
+public static int TotalPages(int total, int pageSize)
+public static int TypewriterChars(string text, float progress01)
+public static int[] Moved(int[] order, int fromIndex, int insertIndex)
+public static long Key(int kind, UnityEngine.Color a, UnityEngine.Color b, int w, int h)
+public static long KeyData(int kind, long dataHash, int a = 0, int b = 0, int c = 0)
+public static long KeyOf(int kind, int a = 0, int b = 0, int c = 0, int d = 0, int e = 0)
+public static long KeySector(UnityEngine.Color color, float startDeg, float sweepDeg, float inner01, int size)
+public static long KeyVersioned(int kind, int version, int w, int h)
+public static readonly UnityEngine.Color Accent
+public static readonly UnityEngine.Color Alive
+public static readonly UnityEngine.Color Border
+public static readonly UnityEngine.Color BorderHair
+public static readonly UnityEngine.Color BorderSoft
+public static readonly UnityEngine.Color Card
+public static readonly UnityEngine.Color CardHover
+public static readonly UnityEngine.Color Dead
+public static readonly UnityEngine.Color Dim
+public static readonly UnityEngine.Color Info
+public static readonly UnityEngine.Color Muted
+public static readonly UnityEngine.Color Panel
+public static readonly UnityEngine.Color PanelRaised
+public static readonly UnityEngine.Color Text
+public static readonly UnityEngine.Color Warn
+public static readonly UnityEngine.Color Window
+public static string BatchSummary(string[] types, int[] counts)
+public static string Clamp(string text, float width, Verse.GameFont font)
+public static string ComplexityLabel(int p)
+public static string CycleSort(string currentKey, bool currentDesc, string clickedKey, out bool descending)
+public static string DateFull(long absTicks, UnityEngine.Vector3 location)
+public static string EtaLabel(float days)
+public static string FormatNumber(double value)
+public static string Hex(UnityEngine.Color c)
+public static string HexWithHash(UnityEngine.Color c)
+public static string NormalizePath(string p)
+public static string RankMedal(int rank)
+public static string RelationLabel(float g)
+public static string RelativeTime(float ageSec)
+public static string StepMark(int i, int current)
+public static string ZoomLabel(float zoom)
+public static string[] SplitLines(string text, int maxLines)
+public static void ActionFeedback(UnityEngine.Rect rect, bool ok, float alpha)
+public static void AlertBlinker(UnityEngine.Rect rect, float t, AlertPriority priority)
+public static void AlertTray(UnityEngine.Rect rect, AlertEntry[] alerts)
+public static void AnchorDots(UnityEngine.Rect rect, string[] sections, ref int current)
+public static void AreaChart(UnityEngine.Rect r, float[] values, Nullable<Color> color = null)
+public static void AreaEditor(UnityEngine.Rect rect, string[] areas, ref int selected)
+public static void Atlas(UnityEngine.Rect rect, UnityEngine.Texture2D tex)
+public static void Atlas(UnityEngine.Rect rect, UnityEngine.Texture2D tex, UnityEngine.Color tint)
+public static void BarChartH(UnityEngine.Rect r, float[] values, string[] labels = null, Nullable<Color> color = null)
+public static void BarChartV(UnityEngine.Rect r, float[] values, string[] labels = null, Nullable<Color> color = null)
+public static void BarGeom(int i, int n, float w, float gap, out float barW, out float xOff)
+public static void BatchSliders(UnityEngine.Rect rect, SliderCfg[] cfg, float[] values)
+public static void BillList(UnityEngine.Rect rect, BillEntry[] bills)
+public static void BillList(UnityEngine.Rect rect, string[] names, float[] done, float[] target, bool[] paused)
+public static void Border(UnityEngine.Rect rect, UnityEngine.Color color)
+public static void BottleneckRibbon(UnityEngine.Rect r, string[] stageLabels, float[] stageTimes, Nullable<Color> color = null)
+public static void Box(UnityEngine.Rect rect, UnityEngine.Color color)
+public static void BoxPlot(UnityEngine.Rect rect, BoxStats[] boxes)
+public static void Breadcrumb(UnityEngine.Rect rect, string[] path, Action<int> onJump)
+public static void Bubble(UnityEngine.Rect rect, BubblePt[] pts)
+public static void BubbleTag(UnityEngine.Rect bubble, string text, Nullable<Color> color = null)
+public static void BuffRow(UnityEngine.Rect rect, string label, float value)
+public static void CapacityBar(UnityEngine.Rect rect, float used, float capacity, Nullable<Color> fill = null)
+public static void CaravanPanel(UnityEngine.Rect rect, string[] members, float load01, float foodDays, string eta)
+public static void Caret(UnityEngine.Rect rect, bool expanded, Nullable<Color> color = null)
+public static void Caret(UnityEngine.Rect rect, float progress01, Nullable<Color> color = null)
+public static void CircuitGraph(UnityEngine.Rect rect, CircuitNode[] nodes, int[] from, int[] to)
+public static void Clear()
+public static void CockpitFrame(UnityEngine.Rect rect, string[] kpis, string[] panels, ref int activePanel)
+public static void ColumnSplit(UnityEngine.Rect row, float[] shares, float gap, float[] widths)
+public static void CompareBars(UnityEngine.Rect rect, string leftLabel, string rightLabel, float a, float b, float max)
+public static void CornerFrame(UnityEngine.Rect rect, UnityEngine.Color color, float armLen = 14, float thickness = 2)
+public static void CreatureCard(UnityEngine.Rect rect, string name, int training, bool bonded)
+public static void Cumulative(float[] vals, float[] buf)
+public static void DataBridgePanel(UnityEngine.Rect rect, BridgeSnapshot[] snaps)
+public static void DonutChart(UnityEngine.Rect r, float[] values, float hole01 = 0.5, string centerLabel = null)
+public static void DragListRow(UnityEngine.Rect row, string label, bool dragging, bool dropTarget)
+public static void EllipsisLabel(UnityEngine.Rect rect, string text, Verse.GameFont font, UnityEngine.Color color, UnityEngine.TextAnchor anchor)
+public static void EndScroll()
+public static void FactionCard(UnityEngine.Rect rect, string name, float goodwill)
+public static void FadeLeft(UnityEngine.Rect rect, UnityEngine.Color bgColor, float width = 24)
+public static void FadeRight(UnityEngine.Rect rect, UnityEngine.Color bgColor, float width = 24)
+public static void FillDisc(UnityEngine.Color32[] buf, int w, int h, float cx, float cy, float rx, float ry, UnityEngine.Color c)
+public static void FillRect(UnityEngine.Color32[] buf, int w, int h, int x0, int y0, int x1, int y1, UnityEngine.Color c)
+public static void FillSector(UnityEngine.Color32[] buf, int w, int h, float cx, float cy, float rx, float ry, float startDeg, float sweepDeg, float inner01, UnityEngine.Color c)
+public static void FillWipe(UnityEngine.Rect rect, float progress01, Nullable<Color> color = null, int rows = 10, float slant = 0.35)
+public static void FlashOverlay(UnityEngine.Rect rect, float t, Nullable<Color> color = null, float thickness = 2)
+public static void FrozenSplit(UnityEngine.Rect outer, float frozenWidth, out UnityEngine.Rect frozen, out UnityEngine.Rect scrollArea)
+public static void Funnel(UnityEngine.Rect rect, float[] stages, string[] labels)
+public static void Gantt(UnityEngine.Rect rect, GanttBar[] bars)
+public static void Gauge(UnityEngine.Rect r, float v, float lo, float hi, string label = null, float warn01 = 0.6, float dead01 = 0.85)
+public static void GeneChips(UnityEngine.Rect rect, string[] genes, int[] complexity, bool[] positive, float gap = 6)
+public static void Glyph(UnityEngine.Rect rect, StatusKind kind)
+public static void GlyphOf(StatusKind kind, out string glyph, out UnityEngine.Color color)
+public static void GradientBar(UnityEngine.Rect rect, UnityEngine.Color lo, UnityEngine.Color hi, int segments = 16)
+public static void GradientRect(UnityEngine.Rect rect, UnityEngine.Color lo, UnityEngine.Color hi, bool horizontal = true)
+public static void GradientRule(UnityEngine.Rect rect, UnityEngine.Color color, int segments = 12)
+public static void GridMap(UnityEngine.Rect rect, int[,] grid)
+public static void Grip(UnityEngine.Rect rect, bool dragging)
+public static void GripDotSize(UnityEngine.Rect area, int rows, int cols, float gap, out float w, out float h)
+public static void HealthRows(UnityEngine.Rect rect, string[] parts, string[] states, float[] severity)
+public static void Heat(UnityEngine.Rect rect, int version, float[,] grid, float lo, float hi, bool flipY = true)
+public static void HeatCalendar(UnityEngine.Rect rect, float[] values, int perRow, float cell = 12, float gap = 3)
+public static void HeatmapGrid(UnityEngine.Rect r, float[,] grid)
+public static void Histogram(UnityEngine.Rect rect, float[] values, int bins)
+public static void HistoryFeed(UnityEngine.Rect rect, string[] dates, string[] texts, string[] kinds)
+public static void IdeoCard(UnityEngine.Rect rect, string name, string leader, int members, string[] precepts)
+public static void InfoCard(UnityEngine.Rect rect, string title, string subtitle, string[] lines)
+public static void InsetPanel(UnityEngine.Rect rect)
+public static void InspectTabs(UnityEngine.Rect rect, string[] labels, ref int sel)
+public static void KeyBindPanel(UnityEngine.Rect rect, string[] actions, string[] keys, bool[] listening)
+public static void Label(UnityEngine.Rect rect, string text, Verse.GameFont font, UnityEngine.Color color, UnityEngine.TextAnchor anchor)
+public static void LayerSwitch(UnityEngine.Rect rect, string[] layers, ref int sel)
+public static void LedMatrix(UnityEngine.Rect r, int[] statuses, int cols)
+public static void LetterCard(UnityEngine.Rect rect, string title, string summary, string time, UnityEngine.Color tone)
+public static void Line(UnityEngine.Color32[] buf, int w, int h, float x0, float y0, float x1, float y1, UnityEngine.Color c, float thickness = 1.5)
+public static void LineChart(UnityEngine.Rect r, float[] values, Nullable<Color> color = null, bool dots = true, bool grid = true)
+public static void LineH(float x, float y, float length, UnityEngine.Color color)
+public static void LineV(float x, float y, float length, UnityEngine.Color color)
+public static void MachineStateTimeline(UnityEngine.Rect r, string[] labels, MachineState[][] rows, float[][] durations)
+public static void MainTabStrip(UnityEngine.Rect rect, string[] labels, ref int sel)
+public static void MessageFeed(UnityEngine.Rect rect, string[] lines, string[] times)
+public static void MiniProfileChip(UnityEngine.Rect rect, string initial, string name, float mood01, float health01)
+public static void Move<T>(IList<T> list, int fromIndex, int insertIndex)
+public static void MoveToFrontInt(int[] queue, int count, int index)
+public static void NeedsPanel(UnityEngine.Rect rect, string[] names, float[] values)
+public static void NumberScrubber(UnityEngine.Rect rect, ref float value, float step, float min, float max, ref bool scrubbing, ref float startX, ref float startVal)
+public static void Ohlc(UnityEngine.Rect rect, OhlcBar[] bars)
+public static void Opportunity(UnityEngine.Rect rect, string tag)
+public static void OverflowFade(UnityEngine.Rect rect, string text, UnityEngine.Color bgColor, Verse.GameFont font = Small, Nullable<Color> color = null, float fadeWidth = 24, int segments = 8)
+public static void PageList(int totalPages, int page, int[] buf, out int count)
+public static void Pager(UnityEngine.Rect rect, int total, int pageSize, ref int page, int[] pageBuf = null)
+public static void Pareto(UnityEngine.Rect rect, float[] values, string[] labels)
+public static void PawnCard(UnityEngine.Rect rect, string initial, string name, string title, float mood01, float health01, string status)
+public static void PawnTableFrame(UnityEngine.Rect rect, string[] headers, string[][] rows, ref int sortCol, SortState[] sorts, ref RowDensity density)
+public static void PieChart(UnityEngine.Rect r, float[] values, string centerLabel = null)
+public static void PinBadge(UnityEngine.Rect host, bool pinned, Nullable<Color> color = null, float size = 12, float margin = 2)
+public static void PointCostBadge(UnityEngine.Rect rect, int budget, int spent)
+public static void PolicyCard(UnityEngine.Rect rect, string name, string summary, int applied)
+public static void PolicyList(UnityEngine.Rect rect, string[] policies, ref int sel)
+public static void Polyline(UnityEngine.Color32[] buf, int w, int h, float[] xs, float[] ys, UnityEngine.Color c, float thickness = 1.5)
+public static void PowerGrid(UnityEngine.Rect rect, float produced, float consumed, float stored, float capacity)
+public static void ProductionFlow(UnityEngine.Rect rect, ProductionStage[] stages)
+public static void ProgressOverlay(UnityEngine.Rect rect, string title, float progress01, string step)
+public static void ProgressRing(UnityEngine.Rect rect, float progress01, Nullable<Color> track = null, Nullable<Color> fill = null, string centerLabel = null, float sweepDeg = 360, float thickness01 = 0.22)
+public static void PsycastTree(UnityEngine.Rect rect, string[] names, int[] levels, bool[] unlocked)
+public static void PulseDot(UnityEngine.Rect rect, UnityEngine.Color color, float t, float minAlpha = 0.45)
+public static void QuestBoard(UnityEngine.Rect rect, string[] titles, float[] progress, float[] daysLeft)
+public static void QuestCard(UnityEngine.Rect rect, string title, int done, int total, string[] objectives)
+public static void Radar(UnityEngine.Rect rect, float[][] series, string[] axes)
+public static void RangeArea(UnityEngine.Rect rect, RangePt[] pts)
+public static void RankList(UnityEngine.Rect rect, string[] names, float[] values, float maxValue)
+public static void RecordsTable(UnityEngine.Rect rect, string[] labels, string[] values)
+public static void Reorder(string[] items, int from, int to)
+public static void ResourceReadout(UnityEngine.Rect rect, string[] categories, int[] counts)
+public static void RgbToHsv(UnityEngine.Color c, out float h, out float s, out float v)
+public static void RichTooltip(UnityEngine.Rect rect, string title, string[] stats, string[] requirements)
+public static void RoomStats(UnityEngine.Rect rect, string[] names, float[] metrics)
+public static void RowSplit(UnityEngine.Rect row, float labelRatio, float gap, out UnityEngine.Rect label, out UnityEngine.Rect value)
+public static void RuleSplit(float totalW, float labelW, float gap, out float leftW, out float labelX, out float rightW)
+public static void RuleWithLabel(UnityEngine.Rect rect, string label, UnityEngine.Color color, float gap = 6)
+public static void Sankey(UnityEngine.Rect rect, SankeyNode[] nodes, SankeyLink[] links)
+public static void ScatterChart(UnityEngine.Rect r, UnityEngine.Vector2[] points, UnityEngine.Vector2 domain, UnityEngine.Vector2 range, Nullable<Color> color = null)
+public static void ScrollFadeHint(UnityEngine.Rect viewport, bool moreBelow)
+public static void SearchBox(UnityEngine.Rect rect, ref string text)
+public static void SearchHighlight(UnityEngine.Rect rect, string text, string query, Verse.GameFont font = Small, Nullable<Color> hitColor = null)
+public static void SectionBar(UnityEngine.Rect rect, string title, string count, bool expanded)
+public static void Sector(UnityEngine.Rect rect, long key, float startDeg, float sweepDeg, float inner01, UnityEngine.Color color, int size = 128)
+public static void SelectRange(bool[] sel, int anchor, int index)
+public static void SeriesRange(float[] values, float fallback, out float lo, out float hi)
+public static void ShareRatios(float[] values, float[] ratios)
+public static void SidebarCollapse(UnityEngine.Rect edge, ref bool open)
+public static void SkillBars(UnityEngine.Rect rect, string[] names, float[] levels, float maxLevel = 20, int columns = 2)
+public static void Sparkline(UnityEngine.Rect r, float[] values, Nullable<Color> color = null, float thickness = 1.5, bool dots = false)
+public static void Spc(UnityEngine.Rect rect, float[] samples, float mean, float ucl, float lcl)
+public static void Spinner(UnityEngine.Rect rect, float t, Nullable<Color> color = null, int segments = 8, float radius = 8, float size = 3)
+public static void Spinner(UnityEngine.Rect rect, float t, UnityEngine.Texture2D tex, float scale = 1, float speed = 240)
+public static void Split(UnityEngine.Rect outer, float ratio, float gap, out UnityEngine.Rect left, out UnityEngine.Rect right)
+public static void StackedBarChartV(UnityEngine.Rect r, float[][] series)
+public static void StatRow(UnityEngine.Rect rect, string label, string value, Nullable<float> bar01 = null, Nullable<Color> barColor = null)
+public static void StatTable(UnityEngine.Rect rect, string[] headers, string[][] rows, float[] shares, float rowH = 20)
+public static void StateSample(UnityEngine.Rect rect, string label, InputState state)
+public static void StepLine(UnityEngine.Rect rect, UnityEngine.Vector2[] pts)
+public static void StepProgressList(UnityEngine.Rect rect, string[] steps, int current)
+public static void StickyNote(UnityEngine.Rect rect, string text, UnityEngine.Color tone)
+public static void StorageBreakdown(UnityEngine.Rect rect, string[] labels, float[] values, UnityEngine.Color[] tones)
+public static void StorageContents(UnityEngine.Rect rect, string[] labels, int[] counts)
+public static void SubtitleLine(UnityEngine.Rect rect, string main, string sub)
+public static void Swatch(UnityEngine.Rect rect, UnityEngine.Color color, bool selected = false)
+public static void TabBar(UnityEngine.Rect rect, string[] tabs, ref int sel, ref float indicatorX)
+public static void Tag(string tag)
+public static void TaleCard(UnityEngine.Rect rect, string teller, string text, int times)
+public static void ThinScrollBar(UnityEngine.Rect viewRect, float contentH, float scrollY, float width = 8)
+public static void ThingFilterTree(UnityEngine.Rect rect, FilterNode[] nodes, bool[] expanded, bool[] checkStates)
+public static void TimeSpeedControl(UnityEngine.Rect rect, ref Verse.TimeSpeed speed)
+public static void TimelinePro(UnityEngine.Rect rect, string[] dates, string[] texts, UnityEngine.Color[] kinds, float rowH = 22)
+public static void TitleCard(UnityEngine.Rect rect, string name, string granted, string[] permits, bool[] ok)
+public static void Toast(UnityEngine.Rect rect, string title, string sub, ToastLevel level, float alpha)
+public static void TradePanel(UnityEngine.Rect rect, TradeRow[] mine, TradeRow[] theirs)
+public static void TraitChips(UnityEngine.Rect rect, string[] traits, bool[] positive, float gap = 6)
+public static void Typewriter(UnityEngine.Rect rect, string text, float progress01, Verse.GameFont font, UnityEngine.Color color, UnityEngine.TextAnchor anchor = MiddleLeft)
+public static void UnitLabel(UnityEngine.Rect rect, string value, string unit, Verse.GameFont valueFont = Medium, Nullable<Color> color = null)
+public static void ValueCell(UnityEngine.Rect rect, float value, float reference)
+public static void Waterfall(UnityEngine.Rect rect, WaterfallStep[] steps)
+public static void Watermark(UnityEngine.Rect rect, string mark, float alpha = 0.06)
+public static void WealthBreakdown(UnityEngine.Rect rect, string[] labels, float[] values, UnityEngine.Color[] tones)
+public static void WeatherStrip(UnityEngine.Rect rect, string[] labels, int[] kinds)
+public static void WizardSteps(UnityEngine.Rect rect, string[] steps, ref int step)
+public string Back()
+public string Current { get; }
+public string Forward()
+public string Group
+public string JumpTo(int index)
+public string Kind
+public string Label
+public string Label
+public string LastError { get; set; }
+public string TableDefName { get; }
+public string Tag
+public string Title
+public string domain
+public string label
+public string label
+public string label
+public string label
+public string label
+public string label
+public string label
+public string label
+public string label
+public string label
+public string label
+public string label
+public string stamp
+public string unit
+public void Clear()
+public void Dispose()
+public void Dispose()
+public void Dispose()
+public void Dispose()
+public void Dispose()
+public void EndInvoke(System.IAsyncResult result)
+public void Invoke(int index, UnityEngine.Rect row, bool dragging)
+public void MarkDirty()
+public void Push(string label)
+public void Reset()
